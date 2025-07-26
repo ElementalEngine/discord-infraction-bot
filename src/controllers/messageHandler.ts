@@ -81,6 +81,7 @@ export function buildSuspensionChannelMessage(
 
   let message = `Suspension Notice:\n` +
                 `Member: <@${userId}>\n` +
+                `User Id: ${userId}\n` +
                 infractionLine +
                 `Result: ${resultLine}\n` +
                 `Suspension ends on: **${formattedEnd}**\n` +
@@ -102,6 +103,7 @@ export function buildUnsuspensionNotice(reason?: string): string {
 export function buildUnsuspensionChannelMessage(userId: string, reason?: string): string {
   return `Unsuspension Notice:\n` +
           `Member: <@${userId}>\n` +
+          `User Id: ${userId}\n` +
           `**The suspension has been lifted.**\n` +
           `Reason: ${reason || 'No reason provided'}`;
 }
