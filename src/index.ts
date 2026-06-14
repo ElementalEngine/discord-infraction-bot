@@ -1,16 +1,22 @@
-import { connectDB } from './database/mongo';
-import discord from './discord/index';
-import { app } from './server';
-import { config } from './config';
+import { initClient } from './client.js';
+import { config } from './config/index.js';
 
-discord.login(config.discord.token);
+process.on('unhandledRejection', (reason) => {
+  console.error('[LJ Bot] Unhandled rejection:', reason);
+});
 
-connectDB();
+process.on('uncaughtException', (error) => {
+  console.error('[LJ Bot] Uncaught exception:', error);
+});
 
-app.listen(
-  config.port,
-  ['127.0.0.1', 'localhost'].includes(config.host) ? config.host : '0.0.0.0',
-  () => {
-    console.log(`Server running at http://${config.host}:${config.port}/`);
-  }
-);
+const client = await initClient();
+await client.login(config.discord.token);
+
+const shutdown = (): void => {
+  console.log('[LJ Bot] Shutting down...');
+  client.destroy();
+  process.exit(0);
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

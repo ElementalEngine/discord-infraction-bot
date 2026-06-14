@@ -1,35 +1,47 @@
-import { config as dotenvConfig } from 'dotenv';
-import path from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+import type { LJBotConfig } from './types.js';
 
-dotenvConfig({
-  path: path.resolve('./.env'),
-});
+loadDotenv();
+const nodeEnvForFile = process.env['NODE_ENV'];
+if (nodeEnvForFile) {
+  loadDotenv({ path: `.env.${nodeEnvForFile}`, override: true });
+}
 
-export const config = {
-  oauth: `https://discord.com/api/oauth2/authorize?client_id=${process.env.BOT_CLIENT_ID ?? ''}&redirect_uri=http%3A%2F%2F${process.env.HOST ?? 'localhost'}:${process.env.PORT ?? 3000}&response_type=code&scope=identify%20connections&state=`,
-  cors: process.env.CORS ?? '*',
+function required(key: string): string {
+  const value = process.env[key];
+  if (value === undefined || value === '') {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
+function optional(key: string, fallback: string): string {
+  return process.env[key] ?? fallback;
+}
+
+export const config: LJBotConfig = {
+  nodeEnv:        required('NODE_ENV'),
   discord: {
-    clientId: process.env.BOT_CLIENT_ID ?? '',
-    token: process.env.BOT_TOKEN ?? '',
-    clientSecret: process.env.BOT_CLIENT_SECRET ?? '',
-    guildId: process.env.DISCORD_GUILD_ID ?? '',
+    token:    required('BOT_TOKEN'),
+    clientId: required('BOT_CLIENT_ID'),
+    guildId:  required('DISCORD_GUILD_ID'),
     channels: {
-      suspendedChannel: process.env.CHANNEL_SUSPENDED_ID ?? '',
+      suspendedChannel: required('CHANNEL_SUSPENDED_ID'),
     },
     roles: {
-      moderator: process.env.ROLE_MODERATOR ?? '',
-      cplBackend: process.env.ROLE_BACKEND ?? '',
-      civ6Rank: process.env.ROLE_CIV6 ?? '',
-      civ7Rank: process.env.ROLE_CIV7 ?? '',
-      civ6Novice: process.env.ROLE_CIV6_NOVICE ?? '',
-      cplTournament: process.env.ROLE_CPL_TOURNAMENT ?? '',
-      cplCloud: process.env.ROLE_CPL_CLOUD ?? '',
-      cplNoviceManager: process.env.ROLE_CPL_NOVICE_MANAGER ?? '',
-      cplCoach: process.env.ROLE_CPL_COACH ?? '',
-      suspended: process.env.ROLE_SUSPENDED ?? '',
+      moderator:       required('ROLE_MODERATOR'),
+      cplBackend:      required('ROLE_BACKEND'),
+      civ6Rank:        required('ROLE_CIV6'),
+      civ7Rank:        required('ROLE_CIV7'),
+      civ6Novice:      required('ROLE_CIV6_NOVICE'),
+      cplTournament:   required('ROLE_CPL_TOURNAMENT'),
+      cplCloud:        required('ROLE_CPL_CLOUD'),
+      cplNoviceManager: required('ROLE_CPL_NOVICE_MANAGER'),
+      cplCoach:        required('ROLE_CPL_COACH'),
+      suspended:       required('ROLE_SUSPENDED'),
     },
   },
-  host: process.env.HOST ?? 'localhost',
-  port: Number(process.env.PORT ?? 3000),
-  mongoDb: process.env.MONGO_URL ?? '',
+  backendBaseUrl:   required('BACKEND_BASE_URL'),
+  ljServiceToken:   required('LJ_SERVICE_TOKEN'),
+  requestTimeoutMs: Number(optional('REQUEST_TIMEOUT_MS', '10000')),
 };
