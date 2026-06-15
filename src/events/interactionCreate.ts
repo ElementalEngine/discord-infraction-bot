@@ -1,19 +1,18 @@
-import { Events } from 'discord.js'
+import { Events, type Interaction } from 'discord.js';
 
-export const name = Events.InteractionCreate
-const test = Events.MessageCreate
+export const name = Events.InteractionCreate;
+export const once = false;
 
-export const execute = async (interaction: any) => {
-  if (!interaction.isChatInputCommand()) return
-  const command = interaction.client.commands.get(interaction.commandName)
+export async function execute(interaction: Interaction): Promise<void> {
+  if (!interaction.isChatInputCommand()) return;
 
-  if (!command)
-    return console.error(
-      `No command matching ${interaction.commandName} was found.`
-    )
+  const command = interaction.client.commands.get(interaction.commandName);
+  if (!command) {
+    console.error(`[InteractionCreate] No command: ${interaction.commandName}`);
+    return;
+  }
 
-  await command.execute(interaction).catch((error: any) => {
-    console.error(`Error executing ${interaction.commandName}`)
-    console.error(error)
-  })
+  await command.execute(interaction).catch((err: unknown) => {
+    console.error(`[InteractionCreate] Error in ${interaction.commandName}:`, err);
+  });
 }
