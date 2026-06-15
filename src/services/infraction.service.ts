@@ -281,6 +281,8 @@ export async function handlePendingSuspensionOnJoin(
     return;
   }
 
+  if (!member.guild.members.cache.has(member.id)) return;
+
   const ends = new Date(record.ends);
 
   await applySuspension(member);

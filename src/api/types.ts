@@ -40,7 +40,7 @@ export interface SuspensionRecordResponse {
   suspended: boolean;
   ends: string | null;
   suspended_roles: string[];
-  active_category: TierCategory | null;
+  active_category: TierCategory | 'flat' | null;
 }
 
 export interface ActiveSuspension {

@@ -13,7 +13,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   if (group === 'tier') {
     await handleTierInfraction(interaction, sub as TierCategory);
-  } else {
+  } else if (group === 'flat') {
     await handleFlatSuspension(interaction, sub as FlatType);
+  } else {
+    console.error(`[Infraction] Unknown subcommand group: ${group}`);
+    await interaction.editReply('Unknown subcommand group.');
   }
 }

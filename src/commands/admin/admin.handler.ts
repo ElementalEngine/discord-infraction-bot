@@ -15,4 +15,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   if (sub === 'unsuspend') await handleUnsuspend(interaction);
   else if (sub === 'modify-days') await handleModifyDays(interaction);
   else if (sub === 'remove-tier') await handleRemoveTier(interaction);
+  else {
+    console.error(`[Admin] Unknown subcommand: ${sub}`);
+    await interaction.editReply('Unknown subcommand.');
+  }
 }
