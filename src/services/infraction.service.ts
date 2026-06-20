@@ -58,7 +58,7 @@ function buildOnExpiry(client: Client, discordId: string): () => Promise<void> {
 
 export async function reconcileOverdueSuspensions(client: Client): Promise<void> {
   const overdue = await api.getOverdueSuspensions();
-  if (overdue.length === 0) return;
+  if (!Array.isArray(overdue) || overdue.length === 0) return;
 
   console.log(`[LJ Bot] Reconciling ${overdue.length} overdue suspension(s).`);
   for (const { discord_id } of overdue) {
