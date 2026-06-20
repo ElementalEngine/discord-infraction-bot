@@ -21,7 +21,7 @@ import {
 } from '../messages/suspension.messages.js';
 import { toUserErrorMessage } from '../utils/error-message.js';
 import { safeEditReply } from '../utils/safe-reply.js';
-import { applySuspension, restoreRoles } from './role.service.js';
+import { applySuspension, getRolesToRemove, restoreRoles } from './role.service.js';
 import { suspensionScheduler } from './suspension-scheduler.service.js';
 
 function buildOnExpiry(client: Client, discordId: string): () => Promise<void> {
@@ -56,7 +56,8 @@ export async function handleTierInfraction(
     const reason = interaction.options.getString('reason');
     const reasonStr = reason ?? 'No reason provided';
 
-    const response = await api.recordTierInfraction(targetUser.id, category, reason);
+    const rolesToRemove = targetMember ? getRolesToRemove(targetMember) : [];
+    const response = await api.recordTierInfraction(targetUser.id, category, reason, rolesToRemove);
 
     if (response.is_warning_only) {
       await interaction.editReply(
@@ -78,7 +79,7 @@ export async function handleTierInfraction(
     const ends = new Date(response.ends);
 
     if (targetMember) {
-      await applySuspension(targetMember);
+      await applySuspension(targetMember, rolesToRemove);
       suspensionScheduler.schedule(
         targetUser.id,
         ends,
@@ -128,11 +129,12 @@ export async function handleFlatSuspension(
     const reason = interaction.options.getString('reason');
     const reasonStr = reason ?? 'No reason provided';
 
-    const response = await api.recordFlatSuspension(targetUser.id, type, reason);
+    const rolesToRemove = targetMember ? getRolesToRemove(targetMember) : [];
+    const response = await api.recordFlatSuspension(targetUser.id, type, reason, rolesToRemove);
     const ends = new Date(response.ends);
 
     if (targetMember) {
-      await applySuspension(targetMember);
+      await applySuspension(targetMember, rolesToRemove);
       suspensionScheduler.schedule(
         targetUser.id,
         ends,
@@ -285,7 +287,8 @@ export async function handlePendingSuspensionOnJoin(
 
   const ends = new Date(record.ends);
 
-  await applySuspension(member);
+  const rolesToRemove = getRolesToRemove(member);
+  await applySuspension(member, rolesToRemove);
   suspensionScheduler.schedule(member.id, ends, buildOnExpiry(client, member.id));
 
   member

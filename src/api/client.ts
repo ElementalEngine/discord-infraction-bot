@@ -58,11 +58,12 @@ export const api = {
     discordId: string,
     category: TierCategory,
     reason: string | null,
+    suspendedRoles: string[],
   ): Promise<TierInfractionResponse> {
     return request<TierInfractionResponse>(
       'POST',
       `/api/v1/infractions/${discordId}/tier/${category}`,
-      { reason },
+      { reason, suspended_roles: suspendedRoles },
     );
   },
 
@@ -70,11 +71,12 @@ export const api = {
     discordId: string,
     type: FlatType,
     reason: string | null,
+    suspendedRoles: string[],
   ): Promise<FlatSuspensionResponse> {
     return request<FlatSuspensionResponse>(
       'POST',
       `/api/v1/infractions/${discordId}/flat/${type}`,
-      { reason },
+      { reason, suspended_roles: suspendedRoles },
     );
   },
 
