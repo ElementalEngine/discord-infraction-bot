@@ -2,16 +2,18 @@
   "name": "lady-justice-bot",
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=24.12.0" },
+  "engines": {
+    "node": ">=24.12.0"
+  },
   "scripts": {
-    "dev":        "tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "dev:deploy": "tsx src/deploy.ts",
-    "build":      "tsc",
-    "start":      "node --enable-source-maps dist/index.js",
-    "deploy":     "node --enable-source-maps dist/deploy.js",
-    "typecheck":  "tsc --noEmit",
-    "lint":       "eslint .",
-    "verify":     "npm run typecheck && npm run build && npm run lint"
+    "build": "tsc",
+    "start": "node --enable-source-maps dist/index.js",
+    "deploy": "node --enable-source-maps dist/deploy.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "verify": "npm run typecheck && npm run build && npm run lint"
   },
   "dependencies": {
     "discord.js": "^14.25.1",
@@ -25,5 +27,8 @@
     "eslint-config-prettier": "^9.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "undici": "6.27.0"
   }
 }
