@@ -116,6 +116,10 @@ export const api = {
     return request<ActiveSuspension[]>('GET', '/api/v1/infractions/active');
   },
 
+  getOverdueSuspensions(): Promise<ActiveSuspension[]> {
+    return request<ActiveSuspension[]>('GET', '/api/v1/infractions/overdue');
+  },
+
   getPendingSuspension(discordId: string): Promise<PendingSuspensionResponse | null> {
     return request<PendingSuspensionResponse | null>(
       'GET',

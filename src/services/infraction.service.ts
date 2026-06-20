@@ -33,25 +33,42 @@ async function postToChannel(
   }
 }
 
+async function resolveExpiredSuspension(client: Client, discordId: string): Promise<void> {
+  const record = await api.getRecord(discordId);
+  if (!record.suspended) return;
+
+  const guild = client.guilds.cache.get(config.discord.guildId);
+  const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
+
+  if (member) {
+    await restoreRoles(member, record.suspended_roles);
+  }
+
+  await api.unsuspend(discordId);
+
+  const channel = guild?.channels.cache.get(config.discord.channels.suspendedChannel);
+  if (channel && channel.isTextBased()) {
+    await channel.send(buildExpiredSuspensionChannelMsg({ userId: discordId }));
+  }
+}
+
 function buildOnExpiry(client: Client, discordId: string): () => Promise<void> {
-  return async () => {
-    const record = await api.getRecord(discordId);
-    if (!record.suspended) return;
+  return () => resolveExpiredSuspension(client, discordId);
+}
 
-    const guild = client.guilds.cache.get(config.discord.guildId);
-    const member = guild ? await guild.members.fetch(discordId).catch(() => null) : null;
+export async function reconcileOverdueSuspensions(client: Client): Promise<void> {
+  const overdue = await api.getOverdueSuspensions();
+  if (overdue.length === 0) return;
 
-    if (member) {
-      await restoreRoles(member, record.suspended_roles);
+  console.log(`[LJ Bot] Reconciling ${overdue.length} overdue suspension(s).`);
+  for (const { discord_id } of overdue) {
+    try {
+      await resolveExpiredSuspension(client, discord_id);
+    } catch (err: unknown) {
+      console.error(`[LJ Bot] Failed to reconcile overdue suspension for ${discord_id}:`, err);
     }
-
-    await api.unsuspend(discordId);
-
-    const channel = guild?.channels.cache.get(config.discord.channels.suspendedChannel);
-    if (channel && channel.isTextBased()) {
-      await channel.send(buildExpiredSuspensionChannelMsg({ userId: discordId }));
-    }
-  };
+  }
+  console.log('[LJ Bot] Overdue reconciliation complete.');
 }
 
 export async function handleTierInfraction(
