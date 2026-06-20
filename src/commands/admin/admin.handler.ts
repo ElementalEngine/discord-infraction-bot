@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction } from 'discord.js';
+import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
 import {
   handleModifyDays,
   handleRemoveTier,
@@ -7,10 +7,9 @@ import {
 import { assertInfractionChannel, assertInfractionPermission } from '../../utils/guards.js';
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   if (!(await assertInfractionChannel(interaction))) return;
   if (!(await assertInfractionPermission(interaction))) return;
-
   const sub = interaction.options.getSubcommand(true);
   if (sub === 'unsuspend') await handleUnsuspend(interaction);
   else if (sub === 'modify-days') await handleModifyDays(interaction);

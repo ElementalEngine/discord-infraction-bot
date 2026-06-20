@@ -24,6 +24,15 @@ import { safeEditReply } from '../utils/safe-reply.js';
 import { applySuspension, getRolesToRemove, restoreRoles } from './role.service.js';
 import { suspensionScheduler } from './suspension-scheduler.service.js';
 
+async function postToChannel(
+  interaction: ChatInputCommandInteraction,
+  content: string,
+): Promise<void> {
+  if (interaction.channel?.isSendable()) {
+    await interaction.channel.send(content);
+  }
+}
+
 function buildOnExpiry(client: Client, discordId: string): () => Promise<void> {
   return async () => {
     const record = await api.getRecord(discordId);
@@ -60,9 +69,11 @@ export async function handleTierInfraction(
     const response = await api.recordTierInfraction(targetUser.id, category, reason, rolesToRemove);
 
     if (response.is_warning_only) {
-      await interaction.editReply(
+      await postToChannel(
+        interaction,
         buildWarningChannelMsg({ userId: targetUser.id, reason: reasonStr }),
       );
+      await interaction.editReply('Warning recorded.');
       if (targetMember) {
         targetMember.send(buildWarningDM({ reason: reasonStr })).catch((err: unknown) =>
           console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err),
@@ -85,7 +96,8 @@ export async function handleTierInfraction(
         ends,
         buildOnExpiry(interaction.client, targetUser.id),
       );
-      await interaction.editReply(
+      await postToChannel(
+        interaction,
         buildSuspensionChannelMsg({
           userId: targetUser.id,
           category,
@@ -96,6 +108,7 @@ export async function handleTierInfraction(
           is_ban_threshold: response.is_ban_threshold,
         }),
       );
+      await interaction.editReply('Infraction recorded.');
       targetMember.send(
         buildSuspensionDM({
           category,
@@ -110,7 +123,8 @@ export async function handleTierInfraction(
       if (response.suspended) {
         await api.createPendingSuspension(targetUser.id, category, reason);
       }
-      await interaction.editReply(buildAbsentUserMsg({ userId: targetUser.id }));
+      await postToChannel(interaction, buildAbsentUserMsg({ userId: targetUser.id }));
+      await interaction.editReply('Infraction recorded for absent user.');
     }
   } catch (error) {
     console.error('[LJ Bot] handleTierInfraction error:', error);
@@ -140,7 +154,8 @@ export async function handleFlatSuspension(
         ends,
         buildOnExpiry(interaction.client, targetUser.id),
       );
-      await interaction.editReply(
+      await postToChannel(
+        interaction,
         buildFlatSuspensionChannelMsg({
           userId: targetUser.id,
           type,
@@ -149,12 +164,14 @@ export async function handleFlatSuspension(
           reason: reasonStr,
         }),
       );
+      await interaction.editReply('Infraction recorded.');
       targetMember.send(
         buildFlatSuspensionDM({ type, days_added: response.days_added, ends, reason: reasonStr }),
       ).catch((err: unknown) => console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err));
     } else {
       await api.createPendingSuspension(targetUser.id, type, reason);
-      await interaction.editReply(buildAbsentUserMsg({ userId: targetUser.id }));
+      await postToChannel(interaction, buildAbsentUserMsg({ userId: targetUser.id }));
+      await interaction.editReply('Infraction recorded for absent user.');
     }
   } catch (error) {
     console.error('[LJ Bot] handleFlatSuspension error:', error);
@@ -182,9 +199,11 @@ export async function handleUnsuspend(interaction: ChatInputCommandInteraction):
     await api.unsuspend(targetUser.id);
     suspensionScheduler.cancel(targetUser.id);
 
-    await interaction.editReply(
+    await postToChannel(
+      interaction,
       buildUnsuspendChannelMsg({ userId: targetUser.id, reason }),
     );
+    await interaction.editReply('Unsuspended.');
     if (targetMember) {
       targetMember.send(buildUnsuspendDM({ reason })).catch((err: unknown) =>
         console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err),
@@ -220,9 +239,11 @@ export async function handleModifyDays(interaction: ChatInputCommandInteraction)
       buildOnExpiry(interaction.client, targetUser.id),
     );
 
-    await interaction.editReply(
+    await postToChannel(
+      interaction,
       buildModifyDaysChannelMsg({ userId: targetUser.id, days, newEnds }),
     );
+    await interaction.editReply('Days modified.');
 
     const rawMember = interaction.options.getMember('target');
     const targetMember = rawMember instanceof GuildMember ? rawMember : null;
@@ -252,7 +273,8 @@ export async function handleRemoveTier(interaction: ChatInputCommandInteraction)
 
     const result = await api.removeTier(targetUser.id, category);
 
-    await interaction.editReply(
+    await postToChannel(
+      interaction,
       buildRemoveTierChannelMsg({
         userId: targetUser.id,
         category,
@@ -260,6 +282,7 @@ export async function handleRemoveTier(interaction: ChatInputCommandInteraction)
         wasChanged: result.was_changed,
       }),
     );
+    await interaction.editReply('Tier updated.');
   } catch (error) {
     console.error('[LJ Bot] handleRemoveTier error:', error);
     await safeEditReply(interaction, toUserErrorMessage(error));
