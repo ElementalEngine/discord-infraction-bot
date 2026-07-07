@@ -14,11 +14,23 @@ import type {
 
 const BASE = config.backendBaseUrl.replace(/\/$/, '');
 
+interface ErrorEnvelope {
+  code?: string;
+  retryable?: boolean;
+}
+
+// The backend wraps its envelope in FastAPI's HTTPException shape,
+// {"detail": {"error": {...}}}; bare {"error": {...}} is tolerated too so a
+// future move to custom JSONResponse emission does not break parsing.
 interface ErrorBody {
-  error?: {
-    code?: string;
-    retryable?: boolean;
+  error?: ErrorEnvelope;
+  detail?: {
+    error?: ErrorEnvelope;
   };
+}
+
+function extractErrorEnvelope(body: ErrorBody): ErrorEnvelope | undefined {
+  return body.detail?.error ?? body.error;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -33,16 +45,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
 
   if (!response.ok) {
-    let detail: ErrorBody = {};
+    let body: ErrorBody = {};
     try {
-      detail = (await response.json()) as ErrorBody;
+      body = (await response.json()) as ErrorBody;
     } catch {
       // ignore parse failures on error bodies
     }
+    const envelope = extractErrorEnvelope(body);
     throw new ApiError(
       response.status,
-      detail.error?.code ?? 'UNKNOWN',
-      detail.error?.retryable ?? false,
+      envelope?.code ?? 'UNKNOWN',
+      envelope?.retryable ?? false,
     );
   }
 
