@@ -14,8 +14,10 @@ await client.login(config.discord.token);
 
 const shutdown = (): void => {
   console.log('[LJ Bot] Shutting down...');
-  client.destroy();
-  process.exit(0);
+  void client
+    .destroy()
+    .catch((err: unknown) => console.error('[LJ Bot] Error during shutdown:', err))
+    .finally(() => process.exit(0));
 };
 
 process.on('SIGINT', shutdown);
