@@ -1,4 +1,4 @@
-import { GuildMember, type ChatInputCommandInteraction, type Client } from 'discord.js';
+import { GuildMember, type ChatInputCommandInteraction, type Client, type User } from 'discord.js';
 import { api } from '../api/client.js';
 import { isTierCategory, type FlatType, type ModifyDaysResponse, type TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
@@ -56,6 +56,74 @@ function buildOnExpiry(client: Client, discordId: string): () => Promise<void> {
   return () => resolveExpiredSuspension(client, discordId);
 }
 
+async function runHandler(
+  label: string,
+  interaction: ChatInputCommandInteraction,
+  fn: () => Promise<void>,
+): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    console.error(`[LJ Bot] ${label} error:`, error);
+    await safeEditReply(interaction, toUserErrorMessage(error));
+  }
+}
+
+interface InfractionTarget {
+  user: User;
+  member: GuildMember | null;
+  reason: string | null;
+  reasonStr: string;
+  rolesToRemove: string[];
+}
+
+function resolveInfractionTarget(interaction: ChatInputCommandInteraction): InfractionTarget {
+  const user = interaction.options.getUser('target', true);
+  const rawMember = interaction.options.getMember('target');
+  const member = rawMember instanceof GuildMember ? rawMember : null;
+  const reason = interaction.options.getString('reason');
+  return {
+    user,
+    member,
+    reason,
+    reasonStr: reason ?? 'No reason provided',
+    rolesToRemove: member ? getRolesToRemove(member) : [],
+  };
+}
+
+function sendDM(member: GuildMember, content: string): void {
+  member.send(content).catch((err: unknown) =>
+    console.error(`[LJ Bot] Failed to DM ${member.id}:`, err),
+  );
+}
+
+async function applySuspensionFlow(
+  interaction: ChatInputCommandInteraction,
+  member: GuildMember,
+  rolesToRemove: string[],
+  ends: Date,
+  channelMsg: string,
+  dmMsg: string,
+): Promise<void> {
+  await applySuspension(member, rolesToRemove);
+  suspensionScheduler.schedule(member.id, ends, buildOnExpiry(interaction.client, member.id));
+  await postToChannel(interaction, channelMsg);
+  await interaction.editReply('Infraction recorded.');
+  sendDM(member, dmMsg);
+}
+
+async function recordAbsentInfraction(
+  interaction: ChatInputCommandInteraction,
+  userId: string,
+  pending: { punishmentType: string; reason: string | null } | null,
+): Promise<void> {
+  if (pending) {
+    await api.createPendingSuspension(userId, pending.punishmentType, pending.reason);
+  }
+  await postToChannel(interaction, buildAbsentUserMsg({ userId }));
+  await interaction.editReply('Infraction recorded for absent user.');
+}
+
 export async function reconcileOverdueSuspensions(client: Client): Promise<void> {
   const overdue = await api.getOverdueSuspensions();
   if (!Array.isArray(overdue) || overdue.length === 0) return;
@@ -75,26 +143,23 @@ export async function handleTierInfraction(
   interaction: ChatInputCommandInteraction,
   category: TierCategory,
 ): Promise<void> {
-  try {
-    const targetUser = interaction.options.getUser('target', true);
-    const rawMember = interaction.options.getMember('target');
-    const targetMember = rawMember instanceof GuildMember ? rawMember : null;
-    const reason = interaction.options.getString('reason');
-    const reasonStr = reason ?? 'No reason provided';
-
-    const rolesToRemove = targetMember ? getRolesToRemove(targetMember) : [];
-    const response = await api.recordTierInfraction(targetUser.id, category, reason, rolesToRemove);
+  await runHandler('handleTierInfraction', interaction, async () => {
+    const target = resolveInfractionTarget(interaction);
+    const response = await api.recordTierInfraction(
+      target.user.id,
+      category,
+      target.reason,
+      target.rolesToRemove,
+    );
 
     if (response.is_warning_only) {
       await postToChannel(
         interaction,
-        buildWarningChannelMsg({ userId: targetUser.id, reason: reasonStr }),
+        buildWarningChannelMsg({ userId: target.user.id, reason: target.reasonStr }),
       );
       await interaction.editReply('Warning recorded.');
-      if (targetMember) {
-        targetMember.send(buildWarningDM({ reason: reasonStr })).catch((err: unknown) =>
-          console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err),
-        );
+      if (target.member) {
+        sendDM(target.member, buildWarningDM({ reason: target.reasonStr }));
       }
       return;
     }
@@ -106,135 +171,98 @@ export async function handleTierInfraction(
 
     const ends = new Date(response.ends);
 
-    if (targetMember) {
-      await applySuspension(targetMember, rolesToRemove);
-      suspensionScheduler.schedule(
-        targetUser.id,
+    if (target.member) {
+      const details = {
+        category,
+        tier: response.tier,
+        days_added: response.days_added,
         ends,
-        buildOnExpiry(interaction.client, targetUser.id),
-      );
-      await postToChannel(
+        reason: target.reasonStr,
+        is_ban_threshold: response.is_ban_threshold,
+      };
+      await applySuspensionFlow(
         interaction,
-        buildSuspensionChannelMsg({
-          userId: targetUser.id,
-          category,
-          tier: response.tier,
-          days_added: response.days_added,
-          ends,
-          reason: reasonStr,
-          is_ban_threshold: response.is_ban_threshold,
-        }),
+        target.member,
+        target.rolesToRemove,
+        ends,
+        buildSuspensionChannelMsg({ userId: target.user.id, ...details }),
+        buildSuspensionDM(details),
       );
-      await interaction.editReply('Infraction recorded.');
-      targetMember.send(
-        buildSuspensionDM({
-          category,
-          tier: response.tier,
-          days_added: response.days_added,
-          ends,
-          reason: reasonStr,
-          is_ban_threshold: response.is_ban_threshold,
-        }),
-      ).catch((err: unknown) => console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err));
     } else {
-      if (response.suspended) {
-        await api.createPendingSuspension(targetUser.id, category, reason);
-      }
-      await postToChannel(interaction, buildAbsentUserMsg({ userId: targetUser.id }));
-      await interaction.editReply('Infraction recorded for absent user.');
+      await recordAbsentInfraction(
+        interaction,
+        target.user.id,
+        response.suspended ? { punishmentType: category, reason: target.reason } : null,
+      );
     }
-  } catch (error) {
-    console.error('[LJ Bot] handleTierInfraction error:', error);
-    await safeEditReply(interaction, toUserErrorMessage(error));
-  }
+  });
 }
 
 export async function handleFlatSuspension(
   interaction: ChatInputCommandInteraction,
   type: FlatType,
 ): Promise<void> {
-  try {
-    const targetUser = interaction.options.getUser('target', true);
-    const rawMember = interaction.options.getMember('target');
-    const targetMember = rawMember instanceof GuildMember ? rawMember : null;
-    const reason = interaction.options.getString('reason');
-    const reasonStr = reason ?? 'No reason provided';
-
-    const rolesToRemove = targetMember ? getRolesToRemove(targetMember) : [];
-    const response = await api.recordFlatSuspension(targetUser.id, type, reason, rolesToRemove);
+  await runHandler('handleFlatSuspension', interaction, async () => {
+    const target = resolveInfractionTarget(interaction);
+    const response = await api.recordFlatSuspension(
+      target.user.id,
+      type,
+      target.reason,
+      target.rolesToRemove,
+    );
     const ends = new Date(response.ends);
 
-    if (targetMember) {
-      await applySuspension(targetMember, rolesToRemove);
-      suspensionScheduler.schedule(
-        targetUser.id,
-        ends,
-        buildOnExpiry(interaction.client, targetUser.id),
-      );
-      await postToChannel(
+    if (target.member) {
+      const details = { type, days_added: response.days_added, ends, reason: target.reasonStr };
+      await applySuspensionFlow(
         interaction,
-        buildFlatSuspensionChannelMsg({
-          userId: targetUser.id,
-          type,
-          days_added: response.days_added,
-          ends,
-          reason: reasonStr,
-        }),
+        target.member,
+        target.rolesToRemove,
+        ends,
+        buildFlatSuspensionChannelMsg({ userId: target.user.id, ...details }),
+        buildFlatSuspensionDM(details),
       );
-      await interaction.editReply('Infraction recorded.');
-      targetMember.send(
-        buildFlatSuspensionDM({ type, days_added: response.days_added, ends, reason: reasonStr }),
-      ).catch((err: unknown) => console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err));
     } else {
-      await api.createPendingSuspension(targetUser.id, type, reason);
-      await postToChannel(interaction, buildAbsentUserMsg({ userId: targetUser.id }));
-      await interaction.editReply('Infraction recorded for absent user.');
+      await recordAbsentInfraction(interaction, target.user.id, {
+        punishmentType: type,
+        reason: target.reason,
+      });
     }
-  } catch (error) {
-    console.error('[LJ Bot] handleFlatSuspension error:', error);
-    await safeEditReply(interaction, toUserErrorMessage(error));
-  }
+  });
 }
 
 export async function handleUnsuspend(interaction: ChatInputCommandInteraction): Promise<void> {
-  try {
-    const targetUser = interaction.options.getUser('target', true);
-    const rawMember = interaction.options.getMember('target');
-    const targetMember = rawMember instanceof GuildMember ? rawMember : null;
+  await runHandler('handleUnsuspend', interaction, async () => {
+    const target = resolveInfractionTarget(interaction);
     const reason = interaction.options.getString('reason', true);
 
-    const record = await api.getRecord(targetUser.id);
+    const record = await api.getRecord(target.user.id);
     if (!record.suspended) {
-      await interaction.editReply(`<@${targetUser.id}> is not currently suspended.`);
+      await interaction.editReply(`<@${target.user.id}> is not currently suspended.`);
       return;
     }
 
-    if (targetMember) {
-      await restoreRoles(targetMember, record.suspended_roles);
+    if (target.member) {
+      await restoreRoles(target.member, record.suspended_roles);
     }
 
-    await api.unsuspend(targetUser.id);
-    suspensionScheduler.cancel(targetUser.id);
+    await api.unsuspend(target.user.id);
+    suspensionScheduler.cancel(target.user.id);
 
     await postToChannel(
       interaction,
-      buildUnsuspendChannelMsg({ userId: targetUser.id, reason }),
+      buildUnsuspendChannelMsg({ userId: target.user.id, reason }),
     );
     await interaction.editReply('Unsuspended.');
-    if (targetMember) {
-      targetMember.send(buildUnsuspendDM({ reason })).catch((err: unknown) =>
-        console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err),
-      );
+    if (target.member) {
+      sendDM(target.member, buildUnsuspendDM({ reason }));
     }
-  } catch (error) {
-    console.error('[LJ Bot] handleUnsuspend error:', error);
-    await safeEditReply(interaction, toUserErrorMessage(error));
-  }
+  });
 }
 
 export async function handleModifyDays(interaction: ChatInputCommandInteraction): Promise<void> {
-  try {
-    const targetUser = interaction.options.getUser('target', true);
+  await runHandler('handleModifyDays', interaction, async () => {
+    const target = resolveInfractionTarget(interaction);
     const days = interaction.options.getInteger('days', true);
 
     if (days === 0) {
@@ -244,39 +272,32 @@ export async function handleModifyDays(interaction: ChatInputCommandInteraction)
 
     let response: ModifyDaysResponse;
     if (days > 0) {
-      response = await api.addDays(targetUser.id, days);
+      response = await api.addDays(target.user.id, days);
     } else {
-      response = await api.removeDays(targetUser.id, Math.abs(days));
+      response = await api.removeDays(target.user.id, Math.abs(days));
     }
 
     const newEnds = new Date(response.new_ends);
     suspensionScheduler.reschedule(
-      targetUser.id,
+      target.user.id,
       newEnds,
-      buildOnExpiry(interaction.client, targetUser.id),
+      buildOnExpiry(interaction.client, target.user.id),
     );
 
     await postToChannel(
       interaction,
-      buildModifyDaysChannelMsg({ userId: targetUser.id, days, newEnds }),
+      buildModifyDaysChannelMsg({ userId: target.user.id, days, newEnds }),
     );
     await interaction.editReply('Days modified.');
 
-    const rawMember = interaction.options.getMember('target');
-    const targetMember = rawMember instanceof GuildMember ? rawMember : null;
-    if (targetMember) {
-      targetMember.send(buildModifyDaysDM({ days, newEnds })).catch((err: unknown) =>
-        console.error(`[LJ Bot] Failed to DM ${targetUser.id}:`, err),
-      );
+    if (target.member) {
+      sendDM(target.member, buildModifyDaysDM({ days, newEnds }));
     }
-  } catch (error) {
-    console.error('[LJ Bot] handleModifyDays error:', error);
-    await safeEditReply(interaction, toUserErrorMessage(error));
-  }
+  });
 }
 
 export async function handleRemoveTier(interaction: ChatInputCommandInteraction): Promise<void> {
-  try {
+  await runHandler('handleRemoveTier', interaction, async () => {
     const targetUser = interaction.options.getUser('target', true);
     const category = interaction.options.getString('category', true);
     if (!isTierCategory(category)) {
@@ -305,10 +326,7 @@ export async function handleRemoveTier(interaction: ChatInputCommandInteraction)
       }),
     );
     await interaction.editReply('Tier updated.');
-  } catch (error) {
-    console.error('[LJ Bot] handleRemoveTier error:', error);
-    await safeEditReply(interaction, toUserErrorMessage(error));
-  }
+  });
 }
 
 export async function handlePendingSuspensionOnJoin(
@@ -336,9 +354,10 @@ export async function handlePendingSuspensionOnJoin(
   await applySuspension(member, rolesToRemove);
   suspensionScheduler.schedule(member.id, ends, buildOnExpiry(client, member.id));
 
-  member
-    .send(buildPendingAppliedDM({ punishmentType: pending.punishment_type, ends, reason: pending.reason }))
-    .catch((err: unknown) => console.error(`[LJ Bot] Failed to DM ${member.id}:`, err));
+  sendDM(
+    member,
+    buildPendingAppliedDM({ punishmentType: pending.punishment_type, ends, reason: pending.reason }),
+  );
 
   const guild = client.guilds.cache.get(config.discord.guildId);
   const channel = guild?.channels.cache.get(config.discord.channels.suspendedChannel);
