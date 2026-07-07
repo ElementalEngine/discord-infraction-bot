@@ -1,4 +1,4 @@
-import type { GuildMember, ChatInputCommandInteraction } from 'discord.js';
+import { GuildMember, type ChatInputCommandInteraction } from 'discord.js';
 import { config } from '../config/index.js';
 
 export async function assertInfractionChannel(
@@ -14,7 +14,11 @@ export async function assertInfractionChannel(
 export async function assertInfractionPermission(
   interaction: ChatInputCommandInteraction,
 ): Promise<boolean> {
-  const member = interaction.member as GuildMember;
+  const member = interaction.member;
+  if (!(member instanceof GuildMember)) {
+    await interaction.editReply('This command can only be used from within the server.');
+    return false;
+  }
   if (
     !member.roles.cache.has(config.discord.roles.moderator) &&
     !member.roles.cache.has(config.discord.roles.cplBackend)

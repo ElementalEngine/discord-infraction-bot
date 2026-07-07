@@ -1,5 +1,16 @@
-export type TierCategory = 'quit' | 'minor' | 'moderate' | 'major' | 'extreme';
-export type FlatType = 'smurf' | 'oversub' | 'comp';
+export const TIER_CATEGORIES = ['quit', 'minor', 'moderate', 'major', 'extreme'] as const;
+export type TierCategory = (typeof TIER_CATEGORIES)[number];
+
+export const FLAT_TYPES = ['smurf', 'oversub', 'comp'] as const;
+export type FlatType = (typeof FLAT_TYPES)[number];
+
+export function isTierCategory(value: string): value is TierCategory {
+  return (TIER_CATEGORIES as readonly string[]).includes(value);
+}
+
+export function isFlatType(value: string): value is FlatType {
+  return (FLAT_TYPES as readonly string[]).includes(value);
+}
 
 export interface TierInfractionResponse {
   discord_id: string;

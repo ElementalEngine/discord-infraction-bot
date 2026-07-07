@@ -15,8 +15,14 @@ function required(key: string): string {
   return value;
 }
 
-function optional(key: string, fallback: string): string {
-  return process.env[key] ?? fallback;
+function optionalPositiveInt(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`Environment variable ${key} must be a positive integer, got: ${raw}`);
+  }
+  return value;
 }
 
 export const config: LJBotConfig = {
@@ -43,5 +49,5 @@ export const config: LJBotConfig = {
   },
   backendBaseUrl:   required('BACKEND_BASE_URL'),
   ljServiceToken:   required('LJ_SERVICE_TOKEN'),
-  requestTimeoutMs: Number(optional('REQUEST_TIMEOUT_MS', '10000')),
+  requestTimeoutMs: optionalPositiveInt('REQUEST_TIMEOUT_MS', 10000),
 };

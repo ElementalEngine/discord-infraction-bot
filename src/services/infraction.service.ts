@@ -1,6 +1,6 @@
 import { GuildMember, type ChatInputCommandInteraction, type Client } from 'discord.js';
 import { api } from '../api/client.js';
-import type { FlatType, ModifyDaysResponse, TierCategory } from '../api/types.js';
+import { isTierCategory, type FlatType, type ModifyDaysResponse, type TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
 import {
   buildAbsentUserMsg,
@@ -278,7 +278,12 @@ export async function handleModifyDays(interaction: ChatInputCommandInteraction)
 export async function handleRemoveTier(interaction: ChatInputCommandInteraction): Promise<void> {
   try {
     const targetUser = interaction.options.getUser('target', true);
-    const category = interaction.options.getString('category', true) as TierCategory;
+    const category = interaction.options.getString('category', true);
+    if (!isTierCategory(category)) {
+      console.error(`[LJ Bot] handleRemoveTier received unknown category: ${category}`);
+      await interaction.editReply('Unknown infraction category.');
+      return;
+    }
 
     const record = await api.getRecord(targetUser.id);
     if (record.suspended) {
