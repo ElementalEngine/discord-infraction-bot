@@ -6,11 +6,11 @@
     "node": ">=24.12.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch src/index.ts",
-    "dev:deploy": "NODE_ENV=development tsx src/deploy.ts",
+    "dev": "tsx watch src/index.ts",
+    "dev:deploy": "tsx src/deploy.ts",
     "build": "tsc",
-    "start": "NODE_ENV=production node --enable-source-maps dist/index.js",
-    "deploy": "NODE_ENV=production node --enable-source-maps dist/deploy.js",
+    "start": "node --enable-source-maps dist/index.js",
+    "deploy": "node --enable-source-maps dist/deploy.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "verify": "npm run typecheck && npm run build && npm run lint"
