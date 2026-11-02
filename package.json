@@ -1,34 +1,41 @@
 {
   "name": "lady-justice-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Discord infractions bot for CivCPL, backed by core-api.",
   "type": "module",
   "engines": {
-    "node": ">=24.12.0"
+    "node": ">=24.18.0"
   },
   "scripts": {
+    "clean": "node --input-type=commonjs -e \"const fs=require('node:fs'); const path=require('node:path'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(path.resolve(p), { recursive: true, force: true });\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run pins && npm run build && npm run gen:contracts:check",
     "dev": "tsx watch src/index.ts",
-    "dev:deploy": "tsx src/deploy.ts",
-    "build": "tsc",
     "start": "node --enable-source-maps dist/index.js",
-    "deploy": "node --enable-source-maps dist/deploy.js",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "verify": "npm run typecheck && npm run build && npm run lint"
+    "lint": "eslint . --max-warnings=0",
+    "test": "tsx --test tests/*.test.ts",
+    "pins": "node scripts/version-pins.mjs",
+    "gen:contracts": "node scripts/gen-contracts.mjs",
+    "gen:contracts:check": "node scripts/gen-contracts.mjs --check",
+    "vendor:contracts": "node scripts/gen-contracts.mjs --vendor && npm run gen:contracts"
   },
   "dependencies": {
-    "discord.js": "^14.25.1",
-    "dotenv": "^17.2.3"
+    "discord.js": "14.27.0",
+    "dotenv": "17.2.3"
+  },
+  "overrides": {
+    "undici": "6.28.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
-    "eslint": "^9.39.0",
-    "eslint-config-prettier": "^10.0.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "openapi-typescript": "^7.4.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.0"
-  },
-  "overrides": {
-    "undici": "6.27.0"
+    "typescript": "^5.9.3"
   }
 }

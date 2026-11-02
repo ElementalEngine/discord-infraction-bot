@@ -1,40 +1,50 @@
-import tsPlugin from '@typescript-eslint/eslint-plugin';
+import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
-import prettierConfig from 'eslint-config-prettier';
+import prettier from 'eslint-config-prettier';
 
-/** @type {import('eslint').Linter.Config[]} */
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: ['dist/**', 'node_modules/**', '**/*.d.ts'],
   },
   {
-    files: ['src/**/*.ts'],
+    files: ['**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        ecmaVersion: 2022,
+        ecmaVersion: 'latest',
         sourceType: 'module',
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
     plugins: {
-      '@typescript-eslint': tsPlugin,
+      '@typescript-eslint': tseslint,
     },
     rules: {
-      'no-unused-vars': 'off',
+      ...tseslint.configs.recommended.rules,
+      ...prettier.rules,
       '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
       ],
-      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': [
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
-      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          allowForKnownSafeCalls: [
+            { from: 'package', name: ['test', 'describe', 'it'], package: 'node:test' },
+          ],
+        },
+      ],
       '@typescript-eslint/no-misused-promises': 'error',
     },
   },
-  prettierConfig,
 ];

@@ -1,0 +1,10 @@
+source-repo: ElementalEngine/core-api-backend
+source-sha: 9366cd6
+source-date: 2026-11-02
+
+generated-by: npm run gen:contracts
+
+The vendored core-api spec Lady Justice's types are generated from. It is bumped
+as a deliberate act with `npm run vendor:contracts` on the box, which copies the
+spec from core-api's checkout and stamps the SHA above. CI checks that the
+committed types match the spec; core-api's own CI checks the spec matches its app.
