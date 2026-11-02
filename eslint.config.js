@@ -2,6 +2,13 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
 
+// Answers go through ui/reply.ts, posts and DMs through client.ts, and embeds are
+// built in ui/posts.ts, so no message pings anyone by accident.
+const HELPERS_ONLY = [
+  'CallExpression[callee.property.name=/^(reply|editReply|followUp|deferReply|deferUpdate|update|send)$/]',
+  "NewExpression[callee.name='EmbedBuilder']",
+].map((selector) => ({ selector, message: 'Answer through ui/reply.ts; post and DM through client.ts.' }));
+
 export default [
   {
     ignores: ['dist/**', 'node_modules/**', '**/*.d.ts'],
@@ -46,5 +53,10 @@ export default [
       ],
       '@typescript-eslint/no-misused-promises': 'error',
     },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/ui/reply.ts', 'src/ui/posts.ts', 'src/client.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...HELPERS_ONLY] },
   },
 ];

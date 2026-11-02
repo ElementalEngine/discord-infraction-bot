@@ -1,157 +1,105 @@
 import { config } from '../config/index.js';
-import { ApiError } from './errors.js';
+import { ApiError, NoAnswer } from './errors.js';
 import type {
-  ActiveSuspension,
-  FlatSuspensionResponse,
+  DaysResult,
+  DueSuspensions,
+  FlatResult,
   FlatType,
-  ModifyDaysResponse,
-  PendingSuspensionResponse,
-  RemoveTierResponse,
-  SuspensionRecordResponse,
+  PendingApplied,
+  SuspensionCleared,
   TierCategory,
-  TierInfractionResponse,
+  TierRemoved,
+  TierResult,
 } from './types.js';
 
-const BASE = config.backendBaseUrl.replace(/\/$/, '');
+// The retry policy lives here and nowhere else: no call site chooses.
+const ATTEMPTS = 2;
+const BACKOFF_MS = 250;
 
-interface ErrorEnvelope {
-  code?: string;
-  retryable?: boolean;
+type Call = Readonly<{
+  method: 'GET' | 'POST' | 'PUT';
+  parts: readonly string[];
+  body?: unknown;
+  actor?: string;
+  // A repeat changes nothing, so an answer lost on the way may be asked for again.
+  idempotent?: boolean;
+}>;
+
+// core-api's retryable flag decides a second attempt on any method. No answer
+// may hide a write that landed, so then only a read or a repeatable write goes again.
+function shouldRetry(error: unknown, call: Call): boolean {
+  if (error instanceof ApiError && error.error) return error.error.retryable === true;
+  if (error instanceof ApiError && error.status < 500) return false;
+  return call.method === 'GET' || call.idempotent === true;
 }
 
-// The backend wraps its envelope in FastAPI's HTTPException shape,
-// {"detail": {"error": {...}}}; bare {"error": {...}} is tolerated too so a
-// future move to custom JSONResponse emission does not break parsing.
-interface ErrorBody {
-  error?: ErrorEnvelope;
-  detail?: {
-    error?: ErrorEnvelope;
-  };
+// A body that is not JSON, such as a proxy's error page, is undefined; no body is null.
+function parseJson(text: string): unknown {
+  try {
+    return text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    return undefined;
+  }
 }
 
-function extractErrorEnvelope(body: ErrorBody): ErrorEnvelope | undefined {
-  return body.detail?.error ?? body.error;
-}
-
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.ljServiceToken}`,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(config.requestTimeoutMs),
-  });
-
-  if (!response.ok) {
-    let body: ErrorBody = {};
-    try {
-      body = (await response.json()) as ErrorBody;
-    } catch {
-      // ignore parse failures on error bodies
+export function createApi(
+  base: string = config.backend.baseUrl,
+  token: string = config.backend.serviceToken,
+  fetcher: typeof fetch = fetch,
+  timeoutMs: number = config.backend.timeoutMs,
+) {
+  async function call<T>(c: Call): Promise<T> {
+    const headers: Record<string, string> = { accept: 'application/json', authorization: `Bearer ${token}` };
+    if (c.actor) headers['x-actor-discord-id'] = c.actor;
+    if (c.body !== undefined) headers['content-type'] = 'application/json';
+    const url = `${base}/api/v2/infractions/${c.parts.map(encodeURIComponent).join('/')}`;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await once<T>(url, c, headers);
+      } catch (error) {
+        if (attempt >= ATTEMPTS || !shouldRetry(error, c)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS * (1 + Math.random())));
+      }
     }
-    const envelope = extractErrorEnvelope(body);
-    throw new ApiError(
-      response.status,
-      envelope?.code ?? 'UNKNOWN',
-      envelope?.retryable ?? false,
-    );
   }
 
-  if (response.status === 204) {
-    return undefined as unknown as T;
+  async function once<T>(url: string, c: Call, headers: Record<string, string>): Promise<T> {
+    let res: Response;
+    let text: string;
+    try {
+      // The signal covers reading the body too.
+      res = await fetcher(url, { method: c.method, headers, ...(c.body === undefined ? {} : { body: JSON.stringify(c.body) }), signal: AbortSignal.timeout(timeoutMs) });
+      text = await res.text();
+    } catch (error) {
+      throw new NoAnswer(error);
+    }
+    const parsed = parseJson(text);
+    if (res.status === 204 && res.ok) return undefined as T;
+    if (!res.ok) throw new ApiError(res.status, parsed);
+    // A success with no readable body may still have been applied.
+    if (parsed === undefined || parsed === null) throw new NoAnswer(new Error(`HTTP ${res.status} with no readable body`));
+    return parsed as T;
   }
 
-  return (await response.json()) as unknown as T;
+  return {
+    due: () => call<DueSuspensions>({ method: 'GET', parts: ['due'] }),
+    tier: (id: string, category: TierCategory, actor: string, reason: string | null, roles: readonly string[]) =>
+      call<TierResult>({ method: 'POST', parts: [id, 'tier', category], actor, body: { reason, suspended_roles: roles } }),
+    flat: (id: string, type: FlatType, actor: string, reason: string | null, roles: readonly string[]) =>
+      call<FlatResult>({ method: 'POST', parts: [id, 'flat', type], actor, body: { reason, suspended_roles: roles } }),
+    days: (id: string, days: number, actor: string) => call<DaysResult>({ method: 'POST', parts: [id, 'days'], actor, body: { days } }),
+    removeTier: (id: string, category: TierCategory, actor: string) =>
+      call<TierRemoved>({ method: 'POST', parts: [id, 'remove-tier'], actor, body: { category } }),
+    unsuspend: (id: string, actor: string, reason: string) =>
+      call<SuspensionCleared>({ method: 'POST', parts: [id, 'unsuspend'], actor, body: { reason }, idempotent: true }),
+    expire: (id: string) => call<SuspensionCleared>({ method: 'POST', parts: [id, 'expire'], idempotent: true }),
+    setPending: (id: string, punishment: TierCategory | FlatType, actor: string, reason: string | null) =>
+      call<void>({ method: 'PUT', parts: [id, 'pending'], actor, body: { punishment_type: punishment, reason }, idempotent: true }),
+    applyPending: (id: string, roles: readonly string[]) =>
+      call<PendingApplied>({ method: 'POST', parts: [id, 'pending', 'apply'], body: { suspended_roles: roles }, idempotent: true }),
+  } as const;
 }
 
-export const api = {
-  recordTierInfraction(
-    discordId: string,
-    category: TierCategory,
-    reason: string | null,
-    suspendedRoles: string[],
-  ): Promise<TierInfractionResponse> {
-    return request<TierInfractionResponse>(
-      'POST',
-      `/api/v1/infractions/${discordId}/tier/${category}`,
-      { reason, suspended_roles: suspendedRoles },
-    );
-  },
+export type Api = ReturnType<typeof createApi>;
 
-  recordFlatSuspension(
-    discordId: string,
-    type: FlatType,
-    reason: string | null,
-    suspendedRoles: string[],
-  ): Promise<FlatSuspensionResponse> {
-    return request<FlatSuspensionResponse>(
-      'POST',
-      `/api/v1/infractions/${discordId}/flat/${type}`,
-      { reason, suspended_roles: suspendedRoles },
-    );
-  },
-
-  addDays(discordId: string, days: number): Promise<ModifyDaysResponse> {
-    return request<ModifyDaysResponse>(
-      'POST',
-      `/api/v1/infractions/${discordId}/add-days`,
-      { days },
-    );
-  },
-
-  removeDays(discordId: string, days: number): Promise<ModifyDaysResponse> {
-    return request<ModifyDaysResponse>(
-      'POST',
-      `/api/v1/infractions/${discordId}/remove-days`,
-      { days },
-    );
-  },
-
-  removeTier(discordId: string, category: TierCategory): Promise<RemoveTierResponse> {
-    return request<RemoveTierResponse>(
-      'POST',
-      `/api/v1/infractions/${discordId}/remove-tier`,
-      { category },
-    );
-  },
-
-  unsuspend(discordId: string): Promise<void> {
-    return request<void>('POST', `/api/v1/infractions/${discordId}/unsuspend`);
-  },
-
-  getRecord(discordId: string): Promise<SuspensionRecordResponse> {
-    return request<SuspensionRecordResponse>('GET', `/api/v1/infractions/${discordId}`);
-  },
-
-  getActiveSuspensions(): Promise<ActiveSuspension[]> {
-    return request<ActiveSuspension[]>('GET', '/api/v1/infractions/active');
-  },
-
-  getOverdueSuspensions(): Promise<ActiveSuspension[]> {
-    return request<ActiveSuspension[]>('GET', '/api/v1/infractions/overdue');
-  },
-
-  getPendingSuspension(discordId: string): Promise<PendingSuspensionResponse | null> {
-    return request<PendingSuspensionResponse | null>(
-      'GET',
-      `/api/v1/infractions/${discordId}/pending`,
-    );
-  },
-
-  createPendingSuspension(
-    discordId: string,
-    punishmentType: string,
-    reason: string | null,
-  ): Promise<void> {
-    return request<void>('POST', `/api/v1/infractions/${discordId}/pending`, {
-      punishment_type: punishmentType,
-      reason,
-    });
-  },
-
-  deletePendingSuspension(discordId: string): Promise<void> {
-    return request<void>('DELETE', `/api/v1/infractions/${discordId}/pending`);
-  },
-};
+export const api = createApi();

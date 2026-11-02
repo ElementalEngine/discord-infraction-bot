@@ -1,5 +1,45 @@
-# LadyJustice - DiscordInfraction-bot
-
+# Lady Justice
 
 ![Github-Banner](assets/ladyJustice.banner.png)
-Bot for Civilization Players League «CPL». Developed on Node.js/TypeScript/MongoDB.
+
+Records infractions for the Civilization Players League (CPL). Staff record a
+tier or flat infraction, change a suspension's days, remove a tier or lift a
+suspension; the bot swaps a suspended member's roles for the Suspended role and
+gives them back when the suspension ends. core-api keeps the records and the
+rules; this bot is the Discord side.
+
+## Commands
+
+| Command | What |
+|---|---|
+| `/infraction tier <quit, minor, moderate, major, extreme>` | a tier infraction: a warning, a suspension, or at the ban threshold a hold until staff act |
+| `/infraction flat <smurf, oversub, comp>` | a flat suspension |
+| `/admin unsuspend`, `/admin modify-days`, `/admin remove-tier` | lift, lengthen or shorten, or remove a tier |
+
+Both are for staff (the moderator and backend roles) in the suspended channel,
+hidden from everyone else until an admin grants them in Integrations. Access is
+one table, `src/config/access.ts`; startup logs where Integrations differ from it.
+Answers to staff are private; every outcome is posted in the suspended channel.
+
+## Suspensions
+
+- A member not in the server is suspended when they join, and so is one who
+  leaves and rejoins while suspended.
+- Suspensions end on their own: the bot asks core-api what is due and when the
+  next one ends, and checks at least once a minute. Nothing is kept in memory.
+- At startup the bot checks the channel, every role it moves, that those roles
+  are below its own, and Manage Roles, and stops with the reason if any is wrong.
+
+## core-api
+
+The bot calls `/api/v2/infractions/*` on its own service token. The types in
+`src/api/contract.ts` are generated from `contracts/openapi.json`, core-api's
+spec, vendored with `npm run vendor:contracts` (see `contracts/PROVENANCE`).
+
+## Scripts
+
+- `npm run dev`: run from source
+- `npm run build`, `npm start`: build to `dist/` and run it
+- `npm run verify`: typecheck, lint, tests, version pins, build, contracts
+
+Commands are set on Discord each time the bot starts.

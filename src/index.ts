@@ -1,24 +1,22 @@
-import { initClient } from './client.js';
+import { client, stop } from './client.js';
 import { config } from './config/index.js';
+import { log } from './utils/log.js';
 
-process.on('unhandledRejection', (reason) => {
-  console.error('[LJ Bot] Unhandled rejection:', reason);
+async function shutdown(signal: string): Promise<void> {
+  log.info(`${signal}: shutting down`);
+  try {
+    await stop();
+  } finally {
+    process.exit(0);
+  }
+}
+
+process.once('SIGINT', () => void shutdown('SIGINT'));
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('unhandledRejection', (reason) => log.error('unhandled rejection', reason));
+
+log.info(`Starting Lady Justice (${config.env})`);
+client.login(config.discord.token).catch((error: unknown) => {
+  log.error('Lady Justice failed to start', error);
+  process.exit(1);
 });
-
-process.on('uncaughtException', (error) => {
-  console.error('[LJ Bot] Uncaught exception:', error);
-});
-
-const client = await initClient();
-await client.login(config.discord.token);
-
-const shutdown = (): void => {
-  console.log('[LJ Bot] Shutting down...');
-  void client
-    .destroy()
-    .catch((err: unknown) => console.error('[LJ Bot] Error during shutdown:', err))
-    .finally(() => process.exit(0));
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);

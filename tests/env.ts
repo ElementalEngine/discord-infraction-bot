@@ -1,0 +1,20 @@
+// The config fails fast on a missing or malformed id, so tests set every key first.
+const ids: Record<string, string> = {
+  DISCORD_GUILD_ID: '100000000000000002',
+  CHANNEL_SUSPENDED_ID: '100000000000000010',
+  ROLE_MODERATOR: '100000000000000020',
+  ROLE_BACKEND: '100000000000000021',
+  ROLE_SUSPENDED: '100000000000000022',
+  ROLE_CIV6: '100000000000000030',
+  ROLE_CIV7: '100000000000000031',
+  ROLE_CIV6_NOVICE: '100000000000000032',
+  ROLE_CPL_TOURNAMENT: '100000000000000033',
+  ROLE_CPL_CLOUD: '100000000000000034',
+  ROLE_CPL_NOVICE_MANAGER: '100000000000000035',
+  ROLE_CPL_COACH: '100000000000000036',
+};
+for (const [key, value] of Object.entries({ ...ids, NODE_ENV: 'test', BACKEND_BASE_URL: 'http://core.test', LJ_SERVICE_TOKEN: 'token', BOT_TOKEN: 'bot' })) {
+  process.env[key] ??= value;
+}
+
+export const ID = ids;

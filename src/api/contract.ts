@@ -2561,13 +2561,16 @@ export interface components {
         SupportedGame: "civ6" | "civ7";
         /**
          * SuspensionCleared
-         * @description A suspension ended, with the roles the bot should give back.
+         * @description A suspension ended, with the roles the bot should give back; `suspended`
+         *     is the record after the call, so a repeat can tell it ended or never did.
          */
         SuspensionCleared: {
             /** Cleared */
             cleared: boolean;
             /** Discord Id */
             discord_id: string;
+            /** Suspended */
+            suspended: boolean;
             /** Suspended Roles */
             suspended_roles: string[];
         };

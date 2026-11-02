@@ -1,53 +1,60 @@
-import { config as loadDotenv } from 'dotenv';
-import type { LJBotConfig } from './types.js';
+import { config as loadEnv } from 'dotenv';
+import path from 'node:path';
 
-loadDotenv();
-const nodeEnvForFile = process.env['NODE_ENV'];
-if (nodeEnvForFile) {
-  loadDotenv({ path: `.env.${nodeEnvForFile}`, override: true });
-}
+const env = process.env.NODE_ENV?.trim() || 'development';
+if (!['development', 'test', 'production'].includes(env)) throw new Error(`Unsupported NODE_ENV: ${env}`);
+loadEnv({ path: path.resolve(`.env.${env}`), override: false, quiet: true });
 
-function required(key: string): string {
-  const value = process.env[key];
-  if (value === undefined || value === '') {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
+const SNOWFLAKE = /^\d{17,20}$/;
+
+function required(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
-function optionalPositiveInt(key: string, fallback: number): number {
-  const raw = process.env[key];
-  if (raw === undefined || raw === '') return fallback;
+// A Discord id is checked at startup, so a typo fails the start rather than a command.
+function id(name: string): string {
+  const value = required(name);
+  if (!SNOWFLAKE.test(value)) throw new Error(`${name} is not a Discord id: ${value}`);
+  return value;
+}
+
+function positiveInt(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
   const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`Environment variable ${key} must be a positive integer, got: ${raw}`);
-  }
+  if (!Number.isInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer.`);
   return value;
 }
 
-export const config: LJBotConfig = {
-  nodeEnv:        required('NODE_ENV'),
-  discord: {
-    token:    required('BOT_TOKEN'),
-    clientId: required('BOT_CLIENT_ID'),
-    guildId:  required('DISCORD_GUILD_ID'),
-    channels: {
-      suspendedChannel: required('CHANNEL_SUSPENDED_ID'),
-    },
-    roles: {
-      moderator:       required('ROLE_MODERATOR'),
-      cplBackend:      required('ROLE_BACKEND'),
-      civ6Rank:        required('ROLE_CIV6'),
-      civ7Rank:        required('ROLE_CIV7'),
-      civ6Novice:      required('ROLE_CIV6_NOVICE'),
-      cplTournament:   required('ROLE_CPL_TOURNAMENT'),
-      cplCloud:        required('ROLE_CPL_CLOUD'),
-      cplNoviceManager: required('ROLE_CPL_NOVICE_MANAGER'),
-      cplCoach:        required('ROLE_CPL_COACH'),
-      suspended:       required('ROLE_SUSPENDED'),
-    },
+export const config = {
+  env,
+  backend: {
+    baseUrl: required('BACKEND_BASE_URL').replace(/\/+$/, ''),
+    serviceToken: required('LJ_SERVICE_TOKEN'),
+    timeoutMs: positiveInt('REQUEST_TIMEOUT_MS', 10_000),
   },
-  backendBaseUrl:   required('BACKEND_BASE_URL'),
-  ljServiceToken:   required('LJ_SERVICE_TOKEN'),
-  requestTimeoutMs: optionalPositiveInt('REQUEST_TIMEOUT_MS', 10000),
-};
+  discord: {
+    token: required('BOT_TOKEN'),
+    guildId: id('DISCORD_GUILD_ID'),
+  },
+  channels: {
+    suspended: id('CHANNEL_SUSPENDED_ID'),
+  },
+  roles: {
+    moderator: id('ROLE_MODERATOR'),
+    backend: id('ROLE_BACKEND'),
+    suspended: id('ROLE_SUSPENDED'),
+  },
+  // The roles a suspension takes away and its end gives back.
+  movedRoles: [
+    id('ROLE_CIV6'),
+    id('ROLE_CIV7'),
+    id('ROLE_CIV6_NOVICE'),
+    id('ROLE_CPL_TOURNAMENT'),
+    id('ROLE_CPL_CLOUD'),
+    id('ROLE_CPL_NOVICE_MANAGER'),
+    id('ROLE_CPL_COACH'),
+  ],
+} as const;
