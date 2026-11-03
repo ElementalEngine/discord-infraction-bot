@@ -124,7 +124,7 @@ export function changeDays(ports: Ports, staffId: string, targetId: string, days
     const r = await ports.api.days(targetId, days, staffId);
     const change = `${days > 0 ? '+' : '−'}${daysLabel(Math.abs(days))}`;
     const result = r.suspended ? change : `${change}: the suspension has ended and their roles come back within a minute`;
-    const post: Post = { tone: 'changed', title: 'Suspension changed', facts: { member: targetId, result, ends: r.ends } };
+    const post: Post = { tone: 'changed', title: 'Suspension changed', facts: { member: targetId, result, ...(r.suspended ? { ends: r.ends } : {}) } };
     // A change that ends the suspension is told to the member by its expiry.
     const member = r.suspended ? await ports.member(targetId).catch(() => null) : null;
     return announce(ports, post, `Changed <@${targetId}>'s suspension by ${change}`, member ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
@@ -135,7 +135,7 @@ export function removeTier(ports: Ports, staffId: string, targetId: string, cate
   return turn(targetId, async () => {
     const r = await ports.api.removeTier(targetId, category, staffId);
     if (!r.was_changed) return `ℹ️ <@${targetId}> has no ${category} tier to remove.`;
-    const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: tierLabel(r.category, r.tier), result: 'One tier removed' } };
+    const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: kindLabel(r.category), result: `One tier removed, now tier ${r.tier}` } };
     return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
   });
 }

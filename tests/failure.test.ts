@@ -10,7 +10,7 @@ const api = (status: number, code: string, retryable = false) =>
   new ApiError(status, { detail: { error: { code, message: `${code} message`, retryable, correlation_id: 'abc123' } } });
 
 test("core-api's refusal is shown as written, with its reference", () => {
-  assert.deepEqual(failureOf(api(409, 'STILL_SUSPENDED')), { text: '‼️ STILL_SUSPENDED message (ref abc123)', ours: false });
+  assert.deepEqual(failureOf(api(409, 'STILL_SUSPENDED')), { text: '‼️ STILL_SUSPENDED message', ours: false });
 });
 
 test('no answer says the write may have landed, so staff check before repeating it', () => {

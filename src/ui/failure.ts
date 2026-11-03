@@ -32,7 +32,7 @@ export function failureOf(error: unknown): Failure {
     if (!detail || error.status === 401 || error.status === 403 || error.status === 422) {
       return { text: `⚠️ core-api refused Lady Justice's request (${detail?.code ?? `HTTP ${error.status}`})${ref}. Tell a developer.`, ours: true };
     }
-    if (error.status < 500) return { text: `‼️ ${detail.message}${ref}`, ours: false };
+    if (error.status < 500) return { text: `‼️ ${detail.message}`, ours: false };
     // A database error can follow a write that landed, so this is not known either.
     return { text: `${UNKNOWN}${ref}`, ours: !detail.retryable };
   }

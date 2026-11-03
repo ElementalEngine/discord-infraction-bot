@@ -180,10 +180,17 @@ test('a tier with nothing to remove answers privately and posts nothing', async 
   assert.equal(h.posts.length, 0);
 });
 
-test('days that end a suspension say the roles come back within a minute', async () => {
+test('a removed tier names the category and the tier it is now', async () => {
+  const h = ports({ removeTier: { discord_id: MEMBER, category: 'quit', tier: 0, was_changed: true } }, member([]));
+  await flows.removeTier(h.p, STAFF, MEMBER, 'quit');
+  assert.deepEqual([h.posts[0]!.facts.infraction, h.posts[0]!.facts.result], ['Quit', 'One tier removed, now tier 0']);
+});
+
+test('days that end a suspension say the roles come back within a minute, with no end shown', async () => {
   const h = ports({ days: { discord_id: MEMBER, days: -5, ends: '2026-11-01T12:00:00Z', suspended: false } }, member([SUSPENDED]));
   await flows.changeDays(h.p, STAFF, MEMBER, -5);
   assert.match(h.posts[0]!.facts.result ?? '', /^−5 days: the suspension has ended and their roles come back within a minute/);
+  assert.equal('ends' in h.posts[0]!.facts, false);
 });
 
 test('an expiry gives the roles back, posts, and DMs the member', async () => {
