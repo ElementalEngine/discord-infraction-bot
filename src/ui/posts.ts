@@ -38,15 +38,13 @@ export type Facts = Readonly<{
   // An end; null is a hold, which has none.
   ends?: string | null;
   reason?: string | null;
-  // The staff member who acted; null when Lady Justice acted on its own.
-  moderator?: string | null;
   todo?: string;
 }>;
 
 export type Post = Readonly<{ tone: Tone; title: string; facts: Facts; pingModerators?: boolean }>;
 
 // A post in the suspended channel. The member is named in the text, so search finds
-// them, and no one is pinged but the moderators on a hold.
+// them; staff are never named, and no one is pinged but the moderators on a hold.
 export function render(post: Post): MessageCreateOptions {
   const { facts } = post;
   const fields: [string, string][] = [['Member', `<@${facts.member}> \`${facts.member}\``]];
@@ -54,7 +52,6 @@ export function render(post: Post): MessageCreateOptions {
   if (facts.result) fields.push(['Result', facts.result]);
   if (facts.ends !== undefined) fields.push(['Ends', facts.ends === null ? 'When staff act' : when(facts.ends)]);
   if (facts.reason !== undefined) fields.push(['Reason', facts.reason?.trim() || 'None given']);
-  if (facts.moderator !== undefined) fields.push(['Moderator', facts.moderator ? `<@${facts.moderator}>` : 'Lady Justice, on its own']);
   if (facts.todo) fields.push(['For staff', facts.todo]);
   const embed = new EmbedBuilder()
     .setColor(TONES[post.tone])

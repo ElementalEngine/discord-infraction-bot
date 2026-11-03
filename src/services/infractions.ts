@@ -83,7 +83,7 @@ export function recordInfraction(ports: Ports, staffId: string, targetId: string
     const member = await ports.member(targetId);
     const { kept, take, left } = rolesToTake(ports, member);
     const move = async (what: string): Promise<Todo> => (member ? suspend(member.id, reader(ports, member), take, left, audit(what, staffId), ports.retryMs) : ABSENT);
-    const facts = { member: targetId, reason, moderator: staffId };
+    const facts = { member: targetId, reason };
 
     if (punishment.kind === 'flat') {
       const r = await ports.api.flat(targetId, punishment.type, staffId, reason, kept);
@@ -124,7 +124,7 @@ export function changeDays(ports: Ports, staffId: string, targetId: string, days
     const r = await ports.api.days(targetId, days, staffId);
     const change = `${days > 0 ? '+' : '−'}${daysLabel(Math.abs(days))}`;
     const result = r.suspended ? change : `${change}: the suspension has ended and their roles come back within a minute`;
-    const post: Post = { tone: 'changed', title: 'Suspension changed', facts: { member: targetId, result, ends: r.ends, moderator: staffId } };
+    const post: Post = { tone: 'changed', title: 'Suspension changed', facts: { member: targetId, result, ends: r.ends } };
     // A change that ends the suspension is told to the member by its expiry.
     const member = r.suspended ? await ports.member(targetId).catch(() => null) : null;
     return announce(ports, post, `Changed <@${targetId}>'s suspension by ${change}`, member ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
@@ -135,7 +135,7 @@ export function removeTier(ports: Ports, staffId: string, targetId: string, cate
   return turn(targetId, async () => {
     const r = await ports.api.removeTier(targetId, category, staffId);
     if (!r.was_changed) return `ℹ️ <@${targetId}> has no ${category} tier to remove.`;
-    const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: tierLabel(r.category, r.tier), result: 'One tier removed', moderator: staffId } };
+    const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: tierLabel(r.category, r.tier), result: 'One tier removed' } };
     return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
   });
 }
@@ -162,7 +162,7 @@ export function unsuspend(ports: Ports, staffId: string, targetId: string, reaso
   return turn(targetId, async () => {
     const ended = await giveBack(ports, await ports.api.unsuspend(targetId, staffId, reason), targetId, 'suspension lifted', staffId);
     if (!ended) return `ℹ️ <@${targetId}> is not suspended.`;
-    const post: Post = { tone: 'lifted', title: 'Suspension lifted', facts: { member: targetId, reason, moderator: staffId, ...withTodo(ended.todo) } };
+    const post: Post = { tone: 'lifted', title: 'Suspension lifted', facts: { member: targetId, reason, ...withTodo(ended.todo) } };
     return announce(ports, post, `Lifted <@${targetId}>'s suspension`, ended.member ? { id: targetId, text: dms.lifted(reason) } : undefined, ended.todo);
   });
 }
@@ -173,7 +173,7 @@ export function expire(ports: Ports, targetId: string): Promise<void> {
     const ended = await giveBack(ports, await ports.api.expire(targetId), targetId, 'suspension ended', null);
     if (!ended) return;
     const result = ended.todo ? 'Served in full' : ended.member ? 'Served in full; roles given back' : 'Served in full; not in the server';
-    const post: Post = { tone: 'lifted', title: 'Suspension ended', facts: { member: targetId, result, moderator: null, ...withTodo(ended.todo) } };
+    const post: Post = { tone: 'lifted', title: 'Suspension ended', facts: { member: targetId, result, ...withTodo(ended.todo) } };
     log.info(`suspension ended for ${targetId}`);
     await announce(ports, post, 'ended', ended.member ? { id: targetId, text: dms.ended(!ended.todo) } : undefined, ended.todo);
   });

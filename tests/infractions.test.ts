@@ -191,7 +191,6 @@ test('an expiry gives the roles back, posts, and DMs the member', async () => {
   const h = ports({ expire: { discord_id: MEMBER, cleared: true, suspended: false, suspended_roles: [CIV6] } }, m);
   await flows.expire(h.p, MEMBER);
   assert.deepEqual(m.writes, [[CIV6]]);
-  assert.equal(h.posts[0]!.facts.moderator, null);
   assert.match(h.dms[0] ?? '', /has ended/);
 });
 

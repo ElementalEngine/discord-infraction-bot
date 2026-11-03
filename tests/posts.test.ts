@@ -10,13 +10,13 @@ const { render, when } = await import('../src/ui/posts.js');
 const MEMBER = '123456789012345678';
 const fieldsOf = (message: ReturnType<typeof render>) => ((message.embeds?.[0] as { toJSON(): APIEmbed }).toJSON().fields ?? []).map((field) => field.name);
 
-test('every post shows its facts in the same order, and names the member in the text', () => {
+test('every post shows its facts in the same order, names the member in the text, and never the staff member', () => {
   const message = render({
     tone: 'suspended',
     title: 'Suspended',
-    facts: { member: MEMBER, infraction: 'Quit · tier 2', result: '3 days', ends: '2026-11-05T12:00:00Z', reason: 'left', moderator: '223456789012345678', todo: 'x' },
+    facts: { member: MEMBER, infraction: 'Quit · tier 2', result: '3 days', ends: '2026-11-05T12:00:00Z', reason: 'left', todo: 'x' },
   });
-  assert.deepEqual(fieldsOf(message), ['Member', 'Infraction', 'Result', 'Ends', 'Reason', 'Moderator', 'For staff']);
+  assert.deepEqual(fieldsOf(message), ['Member', 'Infraction', 'Result', 'Ends', 'Reason', 'For staff']);
   assert.equal(message.content, `<@${MEMBER}> \`${MEMBER}\``);
   assert.deepEqual(message.allowedMentions, { parse: [] });
 });
@@ -29,6 +29,6 @@ test('only a hold pings, and it pings the moderators alone', () => {
 
 test('an end shows the date and how long until it, and a hold has none', () => {
   assert.equal(when('2026-11-05T12:00:00Z'), '<t:1793880000:f> (<t:1793880000:R>)');
-  const embed = (render({ tone: 'held', title: 'Held', facts: { member: MEMBER, ends: null, reason: null, moderator: null } }).embeds?.[0] as { toJSON(): APIEmbed }).toJSON();
-  assert.deepEqual(embed.fields?.slice(1).map((field) => field.value), ['When staff act', 'None given', 'Lady Justice, on its own']);
+  const embed = (render({ tone: 'held', title: 'Held', facts: { member: MEMBER, ends: null, reason: null } }).embeds?.[0] as { toJSON(): APIEmbed }).toJSON();
+  assert.deepEqual(embed.fields?.slice(1).map((field) => field.value), ['When staff act', 'None given']);
 });
