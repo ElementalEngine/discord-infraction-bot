@@ -26,7 +26,6 @@ export async function setupProblems(guild: Guild): Promise<string[]> {
     for (const [name, flag] of [
       ['View Channel', PermissionFlagsBits.ViewChannel],
       ['Send Messages', PermissionFlagsBits.SendMessages],
-      ['Embed Links', PermissionFlagsBits.EmbedLinks],
     ] as const) {
       if (!can.has(flag)) problems.push(`the bot lacks ${name} in #${channel.name}`);
     }

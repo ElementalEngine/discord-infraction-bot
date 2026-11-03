@@ -1,20 +1,18 @@
-import { EmbedBuilder, type MessageCreateOptions } from 'discord.js';
+import type { MessageCreateOptions } from 'discord.js';
 
 import type { FlatType, TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
 
-// Lady Justice's look: one colour per outcome and one mark in every title.
+// One mark per outcome, so staff can tell posts apart at a glance.
 const TONES = {
-  suspended: 0xc8443c,
-  held: 0x7a1f1f,
-  warning: 0xd9a12b,
-  lifted: 0x3e9b6b,
-  changed: 0x4f7cac,
+  suspended: '🟥',
+  held: '⛔',
+  warning: '🟨',
+  lifted: '🟩',
+  changed: '🟦',
 } as const;
 
 export type Tone = keyof typeof TONES;
-
-const MARK = '⚖️';
 
 export const when = (iso: string): string => {
   const at = Math.floor(Date.parse(iso) / 1000);
@@ -43,24 +41,19 @@ export type Facts = Readonly<{
 
 export type Post = Readonly<{ tone: Tone; title: string; facts: Facts; pingModerators?: boolean }>;
 
-// A post in the suspended channel. The member is named in the text, so search finds
-// them; staff are never named, and no one is pinged but the moderators on a hold.
+// A post in the suspended channel, in the plain layout staff know. The member is
+// named in the text, so search finds them; staff are never named, and only a hold pings.
 export function render(post: Post): MessageCreateOptions {
   const { facts } = post;
-  const fields: [string, string][] = [['Member', `<@${facts.member}> \`${facts.member}\``]];
-  if (facts.infraction) fields.push(['Infraction', facts.infraction]);
-  if (facts.result) fields.push(['Result', facts.result]);
-  if (facts.ends !== undefined) fields.push(['Ends', facts.ends === null ? 'When staff act' : when(facts.ends)]);
-  if (facts.reason !== undefined) fields.push(['Reason', facts.reason?.trim() || 'None given']);
-  if (facts.todo) fields.push(['For staff', facts.todo]);
-  const embed = new EmbedBuilder()
-    .setColor(TONES[post.tone])
-    .setTitle(`${MARK} ${post.title}`)
-    .addFields(fields.map(([name, value]) => ({ name, value: value.slice(0, 1024) })));
-  const moderators = `<@&${config.roles.moderator}>`;
+  const lines = [`${TONES[post.tone]} **${post.title}**`, `Member: <@${facts.member}>`, `User Id: ${facts.member}`];
+  if (facts.infraction) lines.push(`Infraction: **${facts.infraction}**`);
+  if (facts.result) lines.push(`Result: ${facts.result}`);
+  if (facts.ends !== undefined) lines.push(`Ends: ${facts.ends === null ? 'when staff act' : when(facts.ends)}`);
+  if (facts.reason !== undefined) lines.push(`Reason: ${facts.reason?.trim() || 'none given'}`);
+  if (facts.todo) lines.push(`For staff: ${facts.todo}`);
+  if (post.pingModerators) lines.push(`<@&${config.roles.moderator}>`);
   return {
-    content: `<@${facts.member}> \`${facts.member}\`${post.pingModerators ? ` · ${moderators}` : ''}`,
-    embeds: [embed],
+    content: lines.join('\n'),
     allowedMentions: post.pingModerators ? { parse: [], roles: [config.roles.moderator] } : { parse: [] },
   };
 }
