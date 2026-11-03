@@ -35,11 +35,13 @@ async function post(guild: Guild, message: Post): Promise<boolean> {
 }
 
 // A DM is best effort: a member may close them.
-async function dm(id: string, text: string): Promise<void> {
+async function dm(id: string, text: string): Promise<boolean> {
   try {
     await client.users.send(id, { content: text, allowedMentions: { parse: [] } });
+    return true;
   } catch (error) {
     log.warn(`DM not delivered to ${id}`, error instanceof Error ? error.message : error);
+    return false;
   }
 }
 

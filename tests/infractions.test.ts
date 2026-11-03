@@ -39,7 +39,7 @@ function member(held: string[], failures = 0) {
 }
 
 // Ports that answer from a script and record what the flows did.
-function ports(answers: Answers, present: ReturnType<typeof member> | null) {
+function ports(answers: Answers, present: ReturnType<typeof member> | null, dmsOpen = true) {
   const calls: { name: string; args: unknown[] }[] = [];
   const posts: Post[] = [];
   const dms: string[] = [];
@@ -58,6 +58,7 @@ function ports(answers: Answers, present: ReturnType<typeof member> | null) {
     post: async (post) => (posts.push(post), true),
     dm: async (_id, text) => {
       dms.push(text);
+      return dmsOpen;
     },
     retryMs: 0,
   };
@@ -215,6 +216,19 @@ test('joining while suspended saves the roles the member came back with, then su
   assert.deepEqual(h.calls[0]!.args, [MEMBER, [CIV6]]);
   assert.deepEqual(m.writes, [[SUSPENDED]]);
   assert.equal(h.posts[0]!.title, 'Suspension applied on joining');
+});
+
+test('a DM that does not reach the member is told to staff', async () => {
+  const h = ports({ tier: tier({}) }, member([CIV6]), false);
+  const text = await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'quit' }, null);
+  assert.match(text, /^⚠️ Suspended .* but the DM did not reach them, so tell them in the server\.$/);
+});
+
+test('joining while suspended shows the reason, given or not', async () => {
+  const m = member([]);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'smurf', reason: null, ends: ENDS, held: false } }, m);
+  await flows.joined(h.p, m);
+  assert.equal(h.posts[0]!.facts.reason, null);
 });
 
 test('joining with nothing to apply changes nothing', async () => {

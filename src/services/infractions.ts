@@ -15,7 +15,8 @@ export type Ports = Readonly<{
   canGive(roleId: string): boolean;
   // False when the post could not be made.
   post(post: Post): Promise<boolean>;
-  dm(id: string, text: string): Promise<void>;
+  // Whether the DM reached the member.
+  dm(id: string, text: string): Promise<boolean>;
   retryMs?: number;
 }>;
 
@@ -48,7 +49,7 @@ async function announce(ports: Ports, post: Post, done: string, dm: Dm | undefin
   const problems: string[] = [];
   if (todo) problems.push('staff must finish it by hand (see the post)');
   if (!(await ports.post(post))) problems.push('the post in the suspended channel failed');
-  if (dm) await ports.dm(dm.id, dm.text);
+  if (dm && !(await ports.dm(dm.id, dm.text))) problems.push('the DM did not reach them, so tell them in the server');
   return problems.length ? `⚠️ ${done}, but ${problems.join(' and ')}.` : `✅ ${done}.`;
 }
 
@@ -200,7 +201,7 @@ export function joined(ports: Ports, member: Member): Promise<void> {
     const post: Post = {
       tone: r.held ? 'held' : 'suspended',
       title: 'Suspension applied on joining',
-      facts: { member: member.id, infraction, ends: r.held ? null : r.ends, ...(r.reason ? { reason: r.reason } : {}), ...withTodo(todo) },
+      facts: { member: member.id, infraction, ends: r.held ? null : r.ends, reason: r.reason, ...withTodo(todo) },
     };
     log.info(`suspension applied on joining for ${member.id}`);
     await announce(ports, post, 'applied', { id: member.id, text: dms.rejoined(infraction, r.held ? null : r.ends) }, todo);

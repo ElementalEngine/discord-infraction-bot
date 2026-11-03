@@ -22,7 +22,7 @@ test('a shutdown waits for the turn in hand and takes no new one', async () => {
     member: async () => null,
     canGive: () => true,
     post: async () => true,
-    dm: async () => undefined,
+    dm: async () => true,
   } as unknown as Ports;
   const inHand = flows.removeTier(ports, '223456789012345678', '123456789012345678', 'minor');
   const drained = flows.drained().then(() => order.push('drained'));
