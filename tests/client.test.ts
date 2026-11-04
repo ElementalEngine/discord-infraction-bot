@@ -69,10 +69,31 @@ test('a refusal is never retried, and both envelope shapes are read', async () =
   }
 });
 
-test('no answer to a tier is never sent again, since it may have landed', async () => {
-  const { fetcher, calls } = scripted(new TypeError('fetch failed'));
-  await assert.rejects(api(fetcher).tier(MEMBER, 'quit', STAFF, null, []), NoAnswer);
-  assert.equal(calls.length, 1);
+test('no answer to a staff write is never sent again, since it may have landed', async () => {
+  const writes = [
+    (a: ReturnType<typeof api>) => a.tier(MEMBER, 'quit', STAFF, null, []),
+    (a: ReturnType<typeof api>) => a.flat(MEMBER, 'smurf', STAFF, null, []),
+    (a: ReturnType<typeof api>) => a.days(MEMBER, 2, STAFF),
+    (a: ReturnType<typeof api>) => a.removeTier(MEMBER, 'quit', STAFF),
+  ];
+  for (const write of writes) {
+    const { fetcher, calls } = scripted(new TypeError('fetch failed'));
+    await assert.rejects(write(api(fetcher)), NoAnswer);
+    assert.equal(calls.length, 1);
+  }
+});
+
+test('no answer to a read, a pending entry or a join is asked again', async () => {
+  const again = [
+    [(a: ReturnType<typeof api>) => a.due(), json(200, { discord_ids: [], next_ends: null })],
+    [(a: ReturnType<typeof api>) => a.setPending(MEMBER, 'smurf', STAFF, null), new Response(null, { status: 204 })],
+    [(a: ReturnType<typeof api>) => a.applyPending(MEMBER, []), json(200, { applied: false })],
+  ] as const;
+  for (const [call, answer] of again) {
+    const { fetcher, calls } = scripted(new TypeError('fetch failed'), answer);
+    await call(api(fetcher));
+    assert.equal(calls.length, 2);
+  }
 });
 
 test('an answer cut off while it was read is no answer, not a failure before the write', async () => {

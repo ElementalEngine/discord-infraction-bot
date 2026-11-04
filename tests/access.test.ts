@@ -38,6 +38,11 @@ test('a missing staff role, an open channel and a member override are each named
   assert.equal(drift[2], 'users: 1 member overrides');
 });
 
+test('an @everyone override is named, as it opens the command to the whole server', () => {
+  const own = [entry(ApplicationCommandPermissionType.Role, ID.ROLE_MODERATOR!, true), entry(ApplicationCommandPermissionType.Role, ID.ROLE_BACKEND!, true), entry(ApplicationCommandPermissionType.Role, GUILD, true)];
+  assert.deepEqual(driftOf(own, [], GUILD).filter((line) => line.startsWith('roles')), ['roles: Discord allows @everyone']);
+});
+
 test("a command's own entry overrides the app's for the same role", () => {
   const app = [entry(ApplicationCommandPermissionType.Role, ID.ROLE_BACKEND!, true)];
   const own = [entry(ApplicationCommandPermissionType.Role, ID.ROLE_BACKEND!, false), entry(ApplicationCommandPermissionType.Role, ID.ROLE_MODERATOR!, true)];

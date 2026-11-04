@@ -29,7 +29,8 @@ export function failureOf(error: unknown): Failure {
   if (error instanceof ApiError) {
     const detail = error.error;
     const ref = detail?.correlation_id ? ` (ref ${detail.correlation_id})` : '';
-    if (!detail || error.status === 401 || error.status === 403 || error.status === 422) {
+    // 401, 403, 422 and 503 come from core-api's gates, before any write.
+    if (!detail || error.status === 401 || error.status === 403 || error.status === 422 || error.status === 503) {
       return { text: `⚠️ core-api refused Lady Justice's request (${detail?.code ?? `HTTP ${error.status}`})${ref}. Tell a developer.`, ours: true };
     }
     if (error.status < 500) return { text: `‼️ ${detail.message}`, ours: false };

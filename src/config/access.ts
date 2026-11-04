@@ -25,12 +25,14 @@ export function driftOf(own: readonly ApplicationCommandPermissions[], app: read
   const have = [...own, ...app.filter((a) => !own.some((o) => o.id === a.id && o.type === a.type))];
   const allChannels = String(BigInt(guildId) - 1n);
   const roles = have.filter((e) => e.type === ApplicationCommandPermissionType.Role && e.permission && e.id !== guildId).map((e) => e.id).sort();
+  const everyone = have.some((e) => e.type === ApplicationCommandPermissionType.Role && e.permission && e.id === guildId);
   const channelEntries = have.filter((e) => e.type === ApplicationCommandPermissionType.Channel);
   const closed = channelEntries.some((e) => e.id === allChannels && !e.permission);
   const channels = channelEntries.filter((e) => e.permission && e.id !== allChannels).map((e) => e.id).sort();
   const users = have.filter((e) => e.type === ApplicationCommandPermissionType.User);
   return [
     ...(same(roles, STAFF) ? [] : [`roles: want ${names(STAFF)}; Discord allows ${names(roles)}`]),
+    ...(everyone ? ['roles: Discord allows @everyone'] : []),
     ...(closed && same(channels, CHANNELS) ? [] : [`channels: want ${names(CHANNELS)}; Discord allows ${closed ? names(channels) : 'every channel'}`]),
     ...(users.length ? [`users: ${users.length} member overrides`] : []),
   ];

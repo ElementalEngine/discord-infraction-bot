@@ -58,3 +58,8 @@ export const config = {
     id('ROLE_CPL_COACH'),
   ],
 } as const;
+
+// A role both taken and given, or listed twice, would move the wrong way.
+if (new Set([...config.movedRoles, config.roles.suspended]).size !== config.movedRoles.length + 1) {
+  throw new Error('ROLE_SUSPENDED and the moved roles must be distinct');
+}

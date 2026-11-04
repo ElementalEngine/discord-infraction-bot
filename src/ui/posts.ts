@@ -1,6 +1,6 @@
 import type { MessageCreateOptions } from 'discord.js';
 
-import type { FlatType, TierCategory } from '../api/types.js';
+import { FLAT_TYPES, type FlatType, type TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
 
 // One mark per outcome, so staff can tell posts apart at a glance.
@@ -22,10 +22,9 @@ export const when = (iso: string): string => {
 const title = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 export const tierLabel = (category: TierCategory, tier: number): string => `${title(category)} · tier ${tier}`;
 export const flatLabel = (type: FlatType): string => `${title(type)} (flat)`;
-const FLATS: readonly string[] = ['smurf', 'oversub', 'comp'];
 // A pending entry names a tier category or a flat type; a record names a category or "flat".
 export const kindLabel = (kind: string | null): string =>
-  !kind ? 'Suspension' : kind === 'flat' ? 'Flat suspension' : FLATS.includes(kind) ? `${title(kind)} (flat)` : title(kind);
+  !kind ? 'Suspension' : kind === 'flat' ? 'Flat suspension' : (FLAT_TYPES as readonly string[]).includes(kind) ? `${title(kind)} (flat)` : title(kind);
 export const daysLabel = (days: number): string => `${days} day${days === 1 ? '' : 's'}`;
 
 // The facts a post can carry; each is shown in the same place on every post.

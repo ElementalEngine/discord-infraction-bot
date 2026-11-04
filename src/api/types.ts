@@ -4,6 +4,7 @@ type Schemas = components['schemas'];
 
 export type TierCategory = Schemas['TierCategory'];
 export type FlatType = Schemas['FlatType'];
+export const FLAT_TYPES: readonly FlatType[] = ['smurf', 'oversub', 'comp'];
 export type TierResult = Schemas['TierResult'];
 export type FlatResult = Schemas['FlatResult'];
 export type DaysResult = Schemas['DaysResult'];

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
 
-import type { FlatType, TierCategory } from '../api/types.js';
+import { FLAT_TYPES, type FlatType, type TierCategory } from '../api/types.js';
 import { recordInfraction, type Ports } from '../services/infractions.js';
 import { refuse } from '../ui/failure.js';
 import { gate, reasonOption, targetOf, targetOption } from './gate.js';
@@ -14,11 +14,8 @@ const TIERS: readonly (readonly [TierCategory, string, boolean])[] = [
   ['extreme', 'Record an extreme infraction.', true],
 ];
 
-const FLATS: readonly (readonly [FlatType, string])[] = [
-  ['smurf', 'Apply a smurf suspension.'],
-  ['oversub', 'Apply an over-sub suspension.'],
-  ['comp', 'Apply a competition suspension.'],
-];
+const FLAT_WORDS: Record<FlatType, string> = { smurf: 'smurf', oversub: 'over-sub', comp: 'competition' };
+const FLATS: readonly (readonly [FlatType, string])[] = FLAT_TYPES.map((type) => [type, `Apply a ${FLAT_WORDS[type]} suspension.`]);
 
 export const data = new SlashCommandBuilder()
   .setName('infraction')

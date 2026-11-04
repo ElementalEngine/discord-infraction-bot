@@ -21,8 +21,9 @@ const sleepUnlessStopped = (ms: number, signal: AbortSignal): Promise<void> => w
 // How long to wait: a full page goes again at once, else until the next end or a minute.
 export function nextWaitMs(due: DueSuspensions, now: number): number {
   if (due.discord_ids.length >= PAGE) return 0;
-  if (!due.next_ends) return MINUTE_MS;
-  return Math.min(MINUTE_MS, Math.max(FLOOR_MS, Date.parse(due.next_ends) - now + FLOOR_MS));
+  const next = due.next_ends ? Date.parse(due.next_ends) : NaN;
+  if (Number.isNaN(next)) return MINUTE_MS;
+  return Math.min(MINUTE_MS, Math.max(FLOOR_MS, next - now + FLOOR_MS));
 }
 
 // core-api says what is due and when the next end is, so nothing is held in memory:

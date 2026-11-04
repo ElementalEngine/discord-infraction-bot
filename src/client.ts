@@ -56,7 +56,7 @@ const portsFor = (guild: Guild): Ports => ({
 // Every command ends in a private answer: what was done, or why not.
 async function route(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.inCachedGuild() || interaction.guildId !== config.discord.guildId) return answer(interaction, '‼️ Use this in the CPL server.');
-  if (!accepting) return answer(interaction, '⏳ Lady Justice is starting. Try again in a moment.');
+  if (!accepting) return answer(interaction, stopping ? '⏳ Lady Justice is restarting. Try again in a minute.' : '⏳ Lady Justice is starting. Try again in a moment.');
   try {
     await defer(interaction);
     const command = COMMANDS.get(interaction.commandName);
@@ -71,6 +71,7 @@ async function route(interaction: ChatInputCommandInteraction): Promise<void> {
 let stopExpiry: (() => Promise<void>) | null = null;
 // Commands wait until setup is checked, so none runs on a bot about to stop.
 let accepting = false;
+let stopping = false;
 
 // Setup is checked before anything else, and a problem stops the bot with its reason.
 async function ready(bot: Client<true>): Promise<void> {
@@ -104,6 +105,7 @@ client.on(Events.GuildMemberAdd, (member) => {
 // Takes no new command, lets the turns in hand finish for up to 10 seconds, then leaves Discord.
 export async function stop(): Promise<void> {
   accepting = false;
+  stopping = true;
   const finish = async (): Promise<void> => {
     await stopExpiry?.();
     await drained();

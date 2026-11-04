@@ -20,7 +20,7 @@ test('no answer says the write may have landed, so staff check before repeating 
 });
 
 test('a refused token or a bad request is ours and asks for a developer', () => {
-  for (const status of [401, 422]) {
+  for (const status of [401, 422, 503]) {
     const failure = failureOf(api(status, 'AUTH'));
     assert.equal(failure.ours, true);
     assert.match(failure.text, /Tell a developer/);

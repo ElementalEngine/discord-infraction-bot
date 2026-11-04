@@ -48,6 +48,7 @@ test('each due member is expired, then the loop sleeps until the next end', asyn
 
 test('the wait is never longer than a minute, nor shorter than a second', () => {
   assert.equal(nextWaitMs({ discord_ids: [], next_ends: null }, NOW), 60_000);
+  assert.equal(nextWaitMs({ discord_ids: [], next_ends: 'not a time' }, NOW), 60_000);
   assert.equal(nextWaitMs({ discord_ids: [], next_ends: at(3_600_000) }, NOW), 60_000);
   assert.equal(nextWaitMs({ discord_ids: [], next_ends: at(-5_000) }, NOW), 1_000);
 });

@@ -2,8 +2,8 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
 
-// Answers go through ui/reply.ts, posts and DMs through client.ts, and embeds are
-// built in ui/posts.ts, so no message pings anyone by accident.
+// Answers go through ui/reply.ts and posts and DMs through client.ts, so no
+// message pings anyone by accident; posts are plain text, never embeds.
 const HELPERS_ONLY = [
   'CallExpression[callee.property.name=/^(reply|editReply|followUp|deferReply|deferUpdate|update|send)$/]',
   "NewExpression[callee.name='EmbedBuilder']",
