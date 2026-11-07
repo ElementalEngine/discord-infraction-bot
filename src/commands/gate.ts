@@ -16,7 +16,7 @@ export const reasonOption =
 
 // Stops a command before any work when this member may not run it here.
 export function gate(interaction: ChatInputCommandInteraction<'cached'>): void {
-  const reason = refusalFor(interaction.channelId, interaction.member.roles.cache);
+  const reason = refusalFor(interaction.commandName, interaction.channelId, interaction.member.roles.cache);
   if (reason) refuse(reason);
 }
 

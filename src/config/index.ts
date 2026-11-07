@@ -41,6 +41,8 @@ export const config = {
   },
   channels: {
     suspended: id('CHANNEL_SUSPENDED_ID'),
+    // Where /lookup may also be run.
+    botCommands: id('CHANNEL_BOT_COMMANDS_ID'),
   },
   roles: {
     moderator: id('ROLE_MODERATOR'),

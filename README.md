@@ -19,7 +19,7 @@ rules; this bot is the Discord side.
 | `/lookup [member]` | a member's record and strikes; without a member, everyone with a strike |
 
 All three are for staff (the moderator and backend roles) in the suspended channel,
-hidden from everyone else until an admin grants them in Integrations. Access is
+`/lookup` in the bot-commands channel too, hidden from everyone else until an admin grants them in Integrations. Access is
 one table, `src/config/access.ts`; startup logs where Integrations differ from it.
 Answers to staff are private; every outcome is posted in the suspended channel.
 
@@ -29,7 +29,7 @@ Answers to staff are private; every outcome is posted in the suspended channel.
   leaves and rejoins while suspended; a tagged lagger who rejoins is tagged again.
 - Suspensions end on their own: the bot asks core-api what is due and when the
   next one ends, and checks at least once a minute. Nothing is kept in memory.
-- At startup the bot checks the channel, every role it moves, that those roles
+- At startup the bot checks the channels, every role it moves, that those roles
   are below its own, and Manage Roles, and stops with the reason if any is wrong.
 
 ## core-api

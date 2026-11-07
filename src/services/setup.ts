@@ -19,6 +19,8 @@ export async function setupProblems(guild: Guild): Promise<string[]> {
   for (const id of [config.roles.moderator, config.roles.backend]) {
     if (!guild.roles.cache.has(id)) problems.push(`staff role ${id} does not exist`);
   }
+  const commands = await guild.channels.fetch(config.channels.botCommands).catch(() => null);
+  if (!commands?.isTextBased()) problems.push(`channel ${config.channels.botCommands} is not a text channel the bot can see`);
   const channel = await guild.channels.fetch(config.channels.suspended).catch(() => null);
   if (!channel?.isTextBased()) problems.push(`channel ${config.channels.suspended} is not a text channel the bot can see`);
   else {
@@ -43,7 +45,7 @@ export async function setupProblems(guild: Guild): Promise<string[]> {
 export async function checkAccess(client: Client<true>, guild: Guild): Promise<void> {
   const [commands, overrides] = await Promise.all([guild.commands.fetch(), guild.commands.permissions.fetch({})]);
   const app = overrides.get(client.application.id) ?? [];
-  const lines = [...commands.values()].flatMap((command) => driftOf(overrides.get(command.id) ?? [], app, guild.id).map((line) => `/${command.name} ${line}`));
+  const lines = [...commands.values()].flatMap((command) => driftOf(command.name, overrides.get(command.id) ?? [], app, guild.id).map((line) => `/${command.name} ${line}`));
   if (lines.length) log.warn(`Command access differs from Integrations in ${lines.length} places:\n  ${lines.join('\n  ')}`);
   else log.info(`Command access matches Integrations for all ${commands.size} commands`);
 }
