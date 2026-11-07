@@ -2,14 +2,14 @@ import type { Api } from '../api/client.js';
 import type { FlatType, PendingApplied, SuspensionCleared, TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
 import { refuse } from '../ui/failure.js';
-import { daysLabel, dms, flatLabel, kindLabel, tierLabel, type Post } from '../ui/posts.js';
+import { daysLabel, dms, flatLabel, kindLabel, strikeLabel, strikesLabel, tierLabel, type Post } from '../ui/posts.js';
 import { log } from '../utils/log.js';
 import { serial } from '../utils/serial.js';
-import { byHand, isSuspended, movedRolesOf, release, suspend, type Member, type Read, type Todo } from './roles.js';
+import { byHand, isHost, isSuspended, isTagged, move, movedRolesOf, release, suspend, type Member, type Read, type Todo } from './roles.js';
 
 // What the flows reach outside themselves, so a test can stand each one in.
 export type Ports = Readonly<{
-  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending'>;
+  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending' | 'record' | 'laggers'>;
   // The member, null when they are not in the server; throws when Discord cannot say.
   member(id: string): Promise<Member | null>;
   canGive(roleId: string): boolean;
@@ -17,6 +17,8 @@ export type Ports = Readonly<{
   post(post: Post): Promise<boolean>;
   // Whether the DM reached the member.
   dm(id: string, text: string): Promise<boolean>;
+  // Display names for the ids still in the server.
+  names(ids: readonly string[]): Promise<ReadonlyMap<string, string>>;
   retryMs?: number;
 }>;
 
@@ -79,7 +81,37 @@ type Punishment = Readonly<{ kind: 'tier'; category: TierCategory } | { kind: 'f
 
 const ABSENT = 'Not in the server: the suspension applies when they join.';
 
+// Gives the lagger role and takes the host role; nothing is written when both are already so.
+async function tag(ports: Ports, member: Member, what: string, staffId: string | null): Promise<Todo> {
+  const remove = isHost(member) ? [config.roles.host] : [];
+  const add = isTagged(member) ? [] : [config.roles.lagger];
+  if (!remove.length && !add.length) return undefined;
+  return move(member.id, reader(ports, member), remove, add, audit(what, staffId), ports.retryMs);
+}
+
+// A lagger strike: recorded like a tier, with the tag at the third instead of a suspension.
+function strike(ports: Ports, staffId: string, targetId: string, reason: string | null): Promise<string> {
+  return turn(targetId, async () => {
+    const member = await ports.member(targetId);
+    const r = await ports.api.tier(targetId, 'lagger', staffId, reason, []);
+    const infraction = strikeLabel(r.tier);
+    const facts = { member: targetId, infraction, reason };
+    if (!r.is_ban_threshold) {
+      const post: Post = { tone: 'warning', title: 'Lagger strike', facts: { ...facts, result: 'Strike recorded', ...(member ? {} : { todo: 'Not in the server.' }) } };
+      return announce(ports, post, `Recorded ${infraction.toLowerCase()} for <@${targetId}>`, member ? { id: targetId, text: dms.strike(r.tier, reason) } : undefined, undefined);
+    }
+    const already = member !== null && isTagged(member);
+    const hosted = member !== null && isHost(member);
+    const todo = member ? await tag(ports, member, 'tagged as a lagger', staffId) : 'Not in the server: the tag is given when they join.';
+    const result = already ? 'Already tagged as a lagger' : `Tagged as a lagger${hosted ? '; the host role removed' : ''}`;
+    const post: Post = { tone: 'suspended', title: already ? 'Lagger strike' : 'Tagged as a lagger', facts: { ...facts, result, ...withTodo(todo) } };
+    const dm = member && !already ? { id: targetId, text: dms.tagged(reason) } : undefined;
+    return announce(ports, post, already ? `<@${targetId}> is already tagged as a lagger` : `Tagged <@${targetId}> as a lagger`, dm, member ? todo : undefined);
+  });
+}
+
 export function recordInfraction(ports: Ports, staffId: string, targetId: string, punishment: Punishment, reason: string | null): Promise<string> {
+  if (punishment.kind === 'tier' && punishment.category === 'lagger') return strike(ports, staffId, targetId, reason);
   return turn(targetId, async () => {
     const member = await ports.member(targetId);
     const { kept, take, left } = rolesToTake(ports, member);
@@ -135,9 +167,18 @@ export function changeDays(ports: Ports, staffId: string, targetId: string, days
 export function removeTier(ports: Ports, staffId: string, targetId: string, category: TierCategory): Promise<string> {
   return turn(targetId, async () => {
     const r = await ports.api.removeTier(targetId, category, staffId);
-    if (!r.was_changed) return `ℹ️ <@${targetId}> has no ${category} tier to remove.`;
-    const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: kindLabel(r.category), result: `One tier removed, now tier ${r.tier}` } };
-    return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
+    if (!r.was_changed) return `ℹ️ <@${targetId}> has no ${category === 'lagger' ? 'lagger strike' : `${category} tier`} to remove.`;
+    if (category !== 'lagger') {
+      const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: kindLabel(r.category), result: `One tier removed, now tier ${r.tier}` } };
+      return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
+    }
+    // Below three strikes the tag comes off, if they wear it.
+    const member = await ports.member(targetId).catch(() => null);
+    const untag = member !== null && isTagged(member);
+    const todo = untag ? await move(member.id, reader(ports, member), [config.roles.lagger], [], audit('lagger tag removed', staffId), ports.retryMs) : undefined;
+    const result = `One strike removed, now ${strikesLabel(r.tier)}${untag ? '; the lagger tag removed' : ''}`;
+    const post: Post = { tone: 'changed', title: 'Lagger strike removed', facts: { member: targetId, result, ...withTodo(todo) } };
+    return announce(ports, post, `Removed a lagger strike from <@${targetId}>; now ${strikesLabel(r.tier)}`, untag ? { id: targetId, text: dms.untagged(r.tier) } : undefined, todo);
   });
 }
 
@@ -194,6 +235,11 @@ export function joined(ports: Ports, member: Member): Promise<void> {
       const todo = "core-api could not check this member on joining. Check their standing with Auth's /lookup and suspend them by hand if needed.";
       await ports.post({ tone: 'warning', title: 'Join not checked', facts: { member: member.id, todo } });
       return;
+    }
+    if (r.lagger_tagged && !isTagged(fresh)) {
+      const todo = await tag(ports, fresh, 'lagger tag applied on joining', null);
+      log.info(`lagger tag applied on joining for ${member.id}`);
+      await announce(ports, { tone: 'warning', title: 'Lagger tag applied on joining', facts: { member: member.id, ...withTodo(todo) } }, 'applied', undefined, todo);
     }
     if (!r.applied) return;
     const infraction = kindLabel(r.punishment_type);

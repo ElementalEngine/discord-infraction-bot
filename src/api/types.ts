@@ -12,4 +12,6 @@ export type TierRemoved = Schemas['TierRemoved'];
 export type SuspensionCleared = Schemas['SuspensionCleared'];
 export type DueSuspensions = Schemas['DueSuspensions'];
 export type PendingApplied = Schemas['PendingApplied'];
+export type SuspensionRecord = Schemas['SuspensionRecord'];
+export type Laggers = Schemas['Laggers'];
 export type ErrorDetail = Schemas['ErrorDetail'];

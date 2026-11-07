@@ -13,10 +13,12 @@ rules; this bot is the Discord side.
 | Command | What |
 |---|---|
 | `/infraction tier <quit, minor, moderate, major, extreme>` | a tier infraction: a warning, a suspension, or at the ban threshold a hold until staff act |
+| `/infraction tier lagger` | a lagger report: three tag the member (the Lagger role on, the Host role off), with no suspension and no decay |
 | `/infraction flat <smurf, oversub, comp>` | a flat suspension |
-| `/admin unsuspend`, `/admin modify-days`, `/admin remove-tier` | lift, lengthen or shorten, or remove a tier |
+| `/admin unsuspend`, `/admin modify-days`, `/admin remove-tier` | lift, lengthen or shorten, or remove a tier or a lagger strike; below three strikes the tag comes off |
+| `/lookup [member]` | a member's record and strikes; without a member, everyone with a strike |
 
-Both are for staff (the moderator and backend roles) in the suspended channel,
+All three are for staff (the moderator and backend roles) in the suspended channel,
 hidden from everyone else until an admin grants them in Integrations. Access is
 one table, `src/config/access.ts`; startup logs where Integrations differ from it.
 Answers to staff are private; every outcome is posted in the suspended channel.
@@ -24,7 +26,7 @@ Answers to staff are private; every outcome is posted in the suspended channel.
 ## Suspensions
 
 - A member not in the server is suspended when they join, and so is one who
-  leaves and rejoins while suspended.
+  leaves and rejoins while suspended; a tagged lagger who rejoins is tagged again.
 - Suspensions end on their own: the bot asks core-api what is due and when the
   next one ends, and checks at least once a minute. Nothing is kept in memory.
 - At startup the bot checks the channel, every role it moves, that those roles

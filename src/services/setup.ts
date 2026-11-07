@@ -11,7 +11,7 @@ export async function setupProblems(guild: Guild): Promise<string[]> {
   const me = await guild.members.fetchMe();
   await guild.roles.fetch();
   if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) problems.push('the bot lacks Manage Roles');
-  for (const id of [...config.movedRoles, config.roles.suspended]) {
+  for (const id of [...config.movedRoles, config.roles.suspended, config.roles.lagger, config.roles.host]) {
     const role = guild.roles.cache.get(id);
     if (!role) problems.push(`role ${id} does not exist`);
     else if (role.managed || role.comparePositionTo(me.roles.highest) >= 0) problems.push(`@${role.name} is not below the bot's highest role`);

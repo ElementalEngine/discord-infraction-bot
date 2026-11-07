@@ -12,6 +12,7 @@ const TIERS: readonly (readonly [TierCategory, string, boolean])[] = [
   ['moderate', 'Record a moderate infraction.', false],
   ['major', 'Record a major infraction.', true],
   ['extreme', 'Record an extreme infraction.', true],
+  ['lagger', 'Record a lagger report: three tag the member.', true],
 ];
 
 const FLAT_WORDS: Record<FlatType, string> = { smurf: 'smurf', oversub: 'over-sub', comp: 'competition' };

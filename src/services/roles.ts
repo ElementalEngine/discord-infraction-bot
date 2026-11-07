@@ -28,6 +28,8 @@ export async function memberOrNull<T>(fetch: () => Promise<T>): Promise<T | null
 const rolesOf = (member: Member): string[] => [...member.roles.cache.keys()];
 
 export const isSuspended = (member: Member): boolean => rolesOf(member).includes(config.roles.suspended);
+export const isTagged = (member: Member): boolean => rolesOf(member).includes(config.roles.lagger);
+export const isHost = (member: Member): boolean => rolesOf(member).includes(config.roles.host);
 
 // The moved roles a member holds, which a suspension takes and keeps on the record.
 export const movedRolesOf = (member: Member): string[] => rolesOf(member).filter((id) => config.movedRoles.includes(id));
@@ -67,6 +69,11 @@ export async function suspend(id: string, read: Read, take: readonly string[], l
   const add = [config.roles.suspended];
   if (!(await setRoles(id, read, take, add, reason, retryMs))) return byHand([...take, ...left], add);
   return left.length ? `Remove by hand: ${mentions(left)}.` : undefined;
+}
+
+// Any other role change, named for staff when it did not land.
+export async function move(id: string, read: Read, remove: readonly string[], add: readonly string[], reason: string, retryMs = RETRY_MS): Promise<Todo> {
+  return (await setRoles(id, read, remove, add, reason, retryMs)) ? undefined : byHand(remove, add);
 }
 
 // Gives back what the record kept, leaving to staff a role deleted since or one the bot may not give.

@@ -194,6 +194,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/infractions/laggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Laggers */
+        get: operations["laggers_api_v2_infractions_laggers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/infractions/{discord_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Record */
+        get: operations["record_api_v2_infractions__discord_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/infractions/{discord_id}/days": {
         parameters: {
             query?: never;
@@ -1577,6 +1611,20 @@ export interface components {
             /** Suspended Roles */
             suspended_roles?: string[];
         };
+        /** Lagger */
+        Lagger: {
+            /** Discord Id */
+            discord_id: string;
+            /** Strikes */
+            strikes: number;
+            /** Tagged */
+            tagged: boolean;
+        };
+        /** Laggers */
+        Laggers: {
+            /** Members */
+            members: components["schemas"]["Lagger"][];
+        };
         /**
          * LeaderPick
          * @description A blind pick: a leader, and a civ where the pool has civs.
@@ -1887,6 +1935,8 @@ export interface components {
             ends: string | null;
             /** Held */
             held: boolean;
+            /** Lagger Tagged */
+            lagger_tagged: boolean;
             /** Punishment Type */
             punishment_type: string | null;
             /** Reason */
@@ -2314,6 +2364,29 @@ export interface components {
             /** Suspended Roles */
             suspended_roles: string[];
         };
+        /**
+         * SuspensionRecord
+         * @description A member's record read as the next write would see it, nothing written;
+         *     a member without one reads as a zero record.
+         */
+        SuspensionRecord: {
+            /** Active Category */
+            active_category: string | null;
+            /** Discord Id */
+            discord_id: string;
+            /** Ends */
+            ends: string | null;
+            /** Held */
+            held: boolean;
+            /** Lagger Tagged */
+            lagger_tagged: boolean;
+            /** Suspended */
+            suspended: boolean;
+            /** Tiers */
+            tiers: {
+                [key: string]: number;
+            };
+        };
         /** TeamGenResponse */
         TeamGenResponse: {
             /** Civ Version */
@@ -2329,7 +2402,7 @@ export interface components {
          * TierCategory
          * @enum {string}
          */
-        TierCategory: "quit" | "minor" | "moderate" | "major" | "extreme";
+        TierCategory: "quit" | "minor" | "moderate" | "major" | "extreme" | "lagger";
         /** TierRemoved */
         TierRemoved: {
             category: components["schemas"]["TierCategory"];
@@ -2945,6 +3018,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DueSuspensions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    laggers_api_v2_infractions_laggers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Laggers"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_api_v2_infractions__discord_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                discord_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuspensionRecord"];
                 };
             };
             /** @description Validation Error */

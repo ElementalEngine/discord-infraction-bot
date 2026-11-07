@@ -16,6 +16,8 @@ const ENDS = '2026-11-05T12:00:00Z';
 const CIV6 = ID.ROLE_CIV6!;
 const SUSPENDED = ID.ROLE_SUSPENDED!;
 const OTHER = '999999999999999990';
+const LAGGER = ID.ROLE_LAGGER!;
+const HOST = ID.ROLE_HOST!;
 
 type Answers = Partial<Record<keyof Ports['api'], unknown>>;
 
@@ -60,6 +62,7 @@ function ports(answers: Answers, present: ReturnType<typeof member> | null, dmsO
       dms.push(text);
       return dmsOpen;
     },
+    names: async (ids) => new Map(ids.map((id) => [id, `name-${id.slice(-2)}`])),
     retryMs: 0,
   };
   return { p, calls, posts, dms };
@@ -211,7 +214,7 @@ test('an expiry that ended nothing does nothing', async () => {
 
 test('joining while suspended saves the roles the member came back with, then suspends them', async () => {
   const m = member([CIV6]);
-  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'quit', reason: null, ends: ENDS, held: false } }, m);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'quit', reason: null, ends: ENDS, held: false, lagger_tagged: false } }, m);
   await flows.joined(h.p, m);
   assert.deepEqual(h.calls[0]!.args, [MEMBER, [CIV6]]);
   assert.deepEqual(m.writes, [[SUSPENDED]]);
@@ -226,14 +229,14 @@ test('a DM that does not reach the member is told to staff', async () => {
 
 test('joining while suspended shows the reason, given or not', async () => {
   const m = member([]);
-  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'smurf', reason: null, ends: ENDS, held: false } }, m);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'smurf', reason: null, ends: ENDS, held: false, lagger_tagged: false } }, m);
   await flows.joined(h.p, m);
   assert.equal(h.posts[0]!.facts.reason, null);
 });
 
 test('joining with nothing to apply changes nothing', async () => {
   const m = member([CIV6]);
-  const h = ports({ applyPending: { discord_id: MEMBER, applied: false, punishment_type: null, reason: null, ends: null, held: false } }, m);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: false, punishment_type: null, reason: null, ends: null, held: false, lagger_tagged: false } }, m);
   await flows.joined(h.p, m);
   assert.deepEqual([m.writes, h.posts], [[], []]);
 });
@@ -329,7 +332,7 @@ test('a join core-api cannot check is posted for staff', async () => {
 test('a join reads the member afresh, so roles given since the join are kept too', async () => {
   const event = member([]);
   const fresh = member([CIV6]);
-  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'smurf', reason: 'alt', ends: ENDS, held: false } }, fresh);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: true, punishment_type: 'smurf', reason: 'alt', ends: ENDS, held: false, lagger_tagged: false } }, fresh);
   await flows.joined(h.p, event);
   assert.deepEqual(h.calls.find((call) => call.name === 'applyPending')!.args, [MEMBER, [CIV6]]);
   assert.deepEqual(fresh.writes, [[SUSPENDED]]);
@@ -345,4 +348,60 @@ test('a role write starts from the member as Discord has them now', async () => 
   h.p = { ...h.p, member: async () => (reads++ === 0 ? before : now) };
   await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'quit' }, null);
   assert.deepEqual(now.writes, [[OTHER, SUSPENDED]]);
+});
+
+const strike = (tier: number): TierResult => tier_({ category: 'lagger', tier, days_added: 0, ends: null, suspended: false, is_ban_threshold: tier >= 3 });
+const tier_ = (over: Partial<TierResult>): TierResult => ({ discord_id: MEMBER, category: 'quit', tier: 2, days_added: 3, ends: ENDS, suspended: true, held: false, is_ban_threshold: false, is_warning_only: false, ...over });
+
+test('a lagger strike is recorded without touching roles, and the third tags them and takes the host role', async () => {
+  const m = member([CIV6, HOST]);
+  const h = ports({ tier: strike(1) }, m);
+  const text = await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'lagger' }, 'host said so');
+  assert.deepEqual(h.calls[0]!.args, [MEMBER, 'lagger', STAFF, 'host said so', []]);
+  assert.deepEqual([m.writes, h.posts[0]!.tone, h.posts[0]!.facts.infraction], [[], 'warning', 'Lagger · strike 1 of 3']);
+  assert.match(text, /^✅ Recorded lagger · strike 1 of 3/);
+  assert.match(h.dms[0] ?? '', /strike 1 of 3/);
+
+  const third = ports({ tier: strike(3) }, m);
+  const tagged = await flows.recordInfraction(third.p, STAFF, MEMBER, { kind: 'tier', category: 'lagger' }, 'x');
+  assert.deepEqual(m.writes, [[CIV6, LAGGER]]);
+  assert.equal(third.posts[0]!.title, 'Tagged as a lagger');
+  assert.match(third.posts[0]!.facts.result ?? '', /host role removed/);
+  assert.match(tagged, /^✅ Tagged/);
+  assert.match(third.dms[0] ?? '', /tagged as a lagger/);
+});
+
+test('a strike on a member already tagged changes no role and says so', async () => {
+  const m = member([LAGGER]);
+  const h = ports({ tier: strike(3) }, m);
+  const text = await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'lagger' }, 'x');
+  assert.deepEqual([m.writes, h.dms], [[], []]);
+  assert.match(text, /already tagged/);
+});
+
+test('a strike on an absent member is recorded for their return', async () => {
+  const h = ports({ tier: strike(3) }, null);
+  const text = await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'lagger' }, 'x');
+  assert.match(h.posts[0]!.facts.todo ?? '', /given when they join/);
+  assert.match(text, /^✅ Tagged/);
+});
+
+test('removing a strike below three takes the tag off and tells the member', async () => {
+  const m = member([LAGGER, CIV6]);
+  const h = ports({ removeTier: { discord_id: MEMBER, category: 'lagger', tier: 2, was_changed: true } }, m);
+  const text = await flows.removeTier(h.p, STAFF, MEMBER, 'lagger');
+  assert.deepEqual(m.writes, [[CIV6]]);
+  assert.match(h.posts[0]!.facts.result ?? '', /now strike 2 of 3; the lagger tag removed/);
+  assert.match(h.dms[0] ?? '', /tag is off/);
+  assert.match(text, /now strike 2 of 3/);
+  const none = ports({ removeTier: { discord_id: MEMBER, category: 'lagger', tier: 0, was_changed: false } }, m);
+  assert.match(await flows.removeTier(none.p, STAFF, MEMBER, 'lagger'), /has no lagger strike/);
+});
+
+test('a tagged member who rejoins gets the tag back', async () => {
+  const m = member([HOST]);
+  const h = ports({ applyPending: { discord_id: MEMBER, applied: false, punishment_type: null, reason: null, ends: null, held: false, lagger_tagged: true } }, m);
+  await flows.joined(h.p, m);
+  assert.deepEqual(m.writes, [[LAGGER]]);
+  assert.equal(h.posts[0]!.title, 'Lagger tag applied on joining');
 });

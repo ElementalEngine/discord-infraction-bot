@@ -119,6 +119,13 @@ test('a pending entry answers no content, and an empty success elsewhere is an e
   await assert.rejects(api(empty.fetcher).due(), NoAnswer);
 });
 
+test('the record and the laggers are plain reads', async () => {
+  const { fetcher, calls } = scripted(json(200, { discord_id: MEMBER }), json(200, { members: [] }));
+  await api(fetcher).record(MEMBER);
+  await api(fetcher).laggers();
+  assert.deepEqual(calls.map((call) => [call.method, call.url]), [['GET', `http://core.test/api/v2/infractions/${MEMBER}`], ['GET', 'http://core.test/api/v2/infractions/laggers']]);
+});
+
 test('each request carries a timeout', async () => {
   let signal: AbortSignal | null | undefined;
   const fetcher = (async (_input: string | URL, init?: RequestInit) => {

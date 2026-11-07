@@ -5,7 +5,7 @@ import { changeDays, removeTier, unsuspend, type Ports } from '../services/infra
 import { refuse } from '../ui/failure.js';
 import { gate, reasonOption, targetOf, targetOption } from './gate.js';
 
-const CATEGORIES: readonly TierCategory[] = ['quit', 'minor', 'moderate', 'major', 'extreme'];
+const CATEGORIES: readonly TierCategory[] = ['quit', 'minor', 'moderate', 'major', 'extreme', 'lagger'];
 
 export const data = new SlashCommandBuilder()
   .setName('admin')
@@ -26,7 +26,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName('remove-tier')
-      .setDescription("Remove one tier from a member's infraction category.")
+      .setDescription("Remove one tier, or one lagger strike, from a member's record.")
       .addUserOption(targetOption)
       .addStringOption((option) =>
         option

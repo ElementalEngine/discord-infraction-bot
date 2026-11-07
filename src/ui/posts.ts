@@ -26,6 +26,10 @@ export const flatLabel = (type: FlatType): string => `${title(type)} (flat)`;
 export const kindLabel = (kind: string | null): string =>
   !kind ? 'Suspension' : kind === 'flat' ? 'Flat suspension' : (FLAT_TYPES as readonly string[]).includes(kind) ? `${title(kind)} (flat)` : title(kind);
 export const daysLabel = (days: number): string => `${days} day${days === 1 ? '' : 's'}`;
+// Three strikes tag a lagger; core-api's ladder has the same cap.
+export const STRIKES = 3;
+export const strikesLabel = (strikes: number): string => `strike ${strikes} of ${STRIKES}`;
+export const strikeLabel = (strikes: number): string => `Lagger · ${strikesLabel(strikes)}`;
 
 // The facts a post can carry; each is shown in the same place on every post.
 export type Facts = Readonly<{
@@ -75,6 +79,11 @@ export const dms = {
   changed: (change: string, ends: string): string => `Your CPL suspension has changed by ${change}. It now ends ${when(ends)}.`,
   lifted: (reason: string): string => ['Your CPL suspension has been lifted.', reasonLine(reason)].join('\n'),
   ended: (rolesBack: boolean): string => (rolesBack ? 'Your CPL suspension has ended and your roles are back.' : 'Your CPL suspension has ended. Staff will give your roles back.'),
+  strike: (strikes: number, reason: string | null): string =>
+    [`You have received a lagger report in CPL: strike ${strikes} of ${STRIKES}. At ${STRIKES} you are tagged as a lagger.`, reasonLine(reason)].join('\n'),
+  tagged: (reason: string | null): string =>
+    ['You have been tagged as a lagger in CPL after three reports, and may no longer host. Only staff can remove the tag.', reasonLine(reason)].join('\n'),
+  untagged: (strikes: number): string => `A lagger report against you in CPL was removed: ${strikes} of ${STRIKES} strikes remain, and the lagger tag is off.`,
   rejoined: (infraction: string, ends: string | null): string =>
     ends ? `Your CPL suspension still applies: ${infraction}, until ${when(ends)}.` : `Your CPL suspension still applies: ${infraction}, until staff review your case.`,
 } as const;

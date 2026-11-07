@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import type { Ports } from '../src/services/infractions.js';
+
+import './env.js';
+
+const { laggers, lookup } = await import('../src/services/lookup.js');
+
+const MEMBER = '123456789012345678';
+const GONE = '323456789012345678';
+
+function ports(record: unknown, list: unknown): Ports {
+  return {
+    api: { record: async () => record, laggers: async () => list } as unknown as Ports['api'],
+    member: async () => null,
+    canGive: () => true,
+    post: async () => true,
+    dm: async () => true,
+    names: async (ids) => new Map(ids.filter((id) => id !== GONE).map((id) => [id, 'Cisco'])),
+  };
+}
+
+test('a lookup shows the suspension, the tiers and the strikes', async () => {
+  const text = await lookup(
+    ports({ discord_id: MEMBER, suspended: true, ends: '2026-11-05T12:00:00Z', held: false, active_category: 'quit', tiers: { quit: 2, minor: 0, moderate: 0, major: 1, extreme: 0, lagger: 3 }, lagger_tagged: true }, null),
+    MEMBER,
+  );
+  assert.equal(text, ['**Cisco `123456789012345678`**', 'Suspension: until <t:1793880000:f> (<t:1793880000:R>) (quit)', 'Tiers: quit 2, major 1', 'Lagger: tagged (strike 3 of 3)'].join('\n'));
+  const clean = await lookup(ports({ discord_id: GONE, suspended: false, ends: null, held: false, active_category: null, tiers: { quit: 0, minor: 0, moderate: 0, major: 0, extreme: 0, lagger: 0 }, lagger_tagged: false }, null), GONE);
+  assert.equal(clean, ['**not in the server `323456789012345678`**', 'Suspension: none', 'Tiers: none', 'Lagger: no strikes'].join('\n'));
+});
+
+test('the laggers list names the tagged first, then the strikes, and stays under the answer limit', async () => {
+  const text = await laggers(ports(null, { members: [{ discord_id: MEMBER, strikes: 3, tagged: true }, { discord_id: GONE, strikes: 1, tagged: false }] }));
+  assert.equal(text, ['**Tagged (1)**', 'Cisco `123456789012345678`', '**With strikes (1)**', 'not in the server `323456789012345678`: strike 1 of 3'].join('\n'));
+  assert.equal(await laggers(ports(null, { members: [] })), 'No member has a lagger strike.');
+  const many = Array.from({ length: 200 }, (_, i) => ({ discord_id: String(100000000000000000 + i), strikes: 1, tagged: false }));
+  const long = await laggers(ports(null, { members: many }));
+  assert.ok(long.length <= 2000);
+  assert.match(long, /… and \d+ more$/);
+});

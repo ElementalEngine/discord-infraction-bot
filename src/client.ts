@@ -5,6 +5,7 @@ import { Client, Events, GatewayIntentBits, type ChatInputCommandInteraction, ty
 import { api } from './api/client.js';
 import * as admin from './commands/admin.js';
 import * as infraction from './commands/infraction.js';
+import * as lookup from './commands/lookup.js';
 import { config } from './config/index.js';
 import { startExpiry } from './services/expiry.js';
 import { drained, expire, joined, type Ports } from './services/infractions.js';
@@ -15,7 +16,7 @@ import { render, type Post } from './ui/posts.js';
 import { answer, defer } from './ui/reply.js';
 import { log } from './utils/log.js';
 
-const COMMANDS = new Map([infraction, admin].map((command) => [command.data.name, command]));
+const COMMANDS = new Map([infraction, admin, lookup].map((command) => [command.data.name, command]));
 
 // Server Members brings the join event, which suspends a returning member again.
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
@@ -45,12 +46,23 @@ async function dm(id: string, text: string): Promise<boolean> {
   }
 }
 
+// Discord answers up to 100 members a fetch; one who left is left out.
+async function names(guild: Guild, ids: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  const found = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const members = await guild.members.fetch({ user: [...ids.slice(i, i + 100)] });
+    for (const member of members.values()) found.set(member.id, member.displayName);
+  }
+  return found;
+}
+
 const portsFor = (guild: Guild): Ports => ({
   api,
   member: (id) => memberOf(guild, id),
   canGive: (id) => guild.roles.cache.get(id)?.editable === true,
   post: (message) => post(guild, message),
   dm,
+  names: (ids) => names(guild, ids),
 });
 
 // Every command ends in a private answer: what was done, or why not.

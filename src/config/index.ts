@@ -46,6 +46,9 @@ export const config = {
     moderator: id('ROLE_MODERATOR'),
     backend: id('ROLE_BACKEND'),
     suspended: id('ROLE_SUSPENDED'),
+    // Three lagger strikes give the first and take the second.
+    lagger: id('ROLE_LAGGER'),
+    host: id('ROLE_HOST'),
   },
   // The roles a suspension takes away and its end gives back.
   movedRoles: [
@@ -60,6 +63,7 @@ export const config = {
 } as const;
 
 // A role both taken and given, or listed twice, would move the wrong way.
-if (new Set([...config.movedRoles, config.roles.suspended]).size !== config.movedRoles.length + 1) {
-  throw new Error('ROLE_SUSPENDED and the moved roles must be distinct');
+const given = [config.roles.suspended, config.roles.lagger, config.roles.host];
+if (new Set([...config.movedRoles, ...given]).size !== config.movedRoles.length + given.length) {
+  throw new Error('ROLE_SUSPENDED, ROLE_LAGGER, ROLE_HOST and the moved roles must be distinct');
 }
