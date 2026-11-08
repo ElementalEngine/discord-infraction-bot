@@ -158,9 +158,10 @@ export function changeDays(ports: Ports, staffId: string, targetId: string, days
     const change = `${days > 0 ? '+' : '−'}${daysLabel(Math.abs(days))}`;
     const result = r.suspended ? change : `${change}: the suspension has ended and their roles come back within a minute`;
     const post: Post = { tone: 'changed', title: 'Suspension changed', facts: { member: targetId, result, ...(r.suspended ? { ends: r.ends } : {}) } };
-    // A change that ends the suspension is told to the member by its expiry.
-    const member = r.suspended ? await ports.member(targetId).catch(() => null) : null;
-    return announce(ports, post, `Changed <@${targetId}>'s suspension by ${change}`, member ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
+    // A change that ends the suspension is told to the member by its expiry; one
+    // Discord cannot say is in the server is still sent the DM, so a miss is reported.
+    const member = r.suspended ? await ports.member(targetId).catch(() => undefined) : null;
+    return announce(ports, post, `Changed <@${targetId}>'s suspension by ${change}`, member !== null ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
   });
 }
 
@@ -172,10 +173,15 @@ export function removeTier(ports: Ports, staffId: string, targetId: string, cate
       const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: kindLabel(r.category), result: `One tier removed, now tier ${r.tier}` } };
       return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
     }
-    // Below three strikes the tag comes off, if they wear it.
-    const member = await ports.member(targetId).catch(() => null);
-    const untag = member !== null && isTagged(member);
-    const todo = untag ? await move(member.id, reader(ports, member), [config.roles.lagger], [], audit('lagger tag removed', staffId), ports.retryMs) : undefined;
+    // Below three strikes the tag comes off, if they wear it; when Discord cannot say, staff check.
+    const member = await ports.member(targetId).catch(() => undefined);
+    const untag = member != null && isTagged(member);
+    const todo =
+      member === undefined
+        ? `If they wear <@&${config.roles.lagger}>: ${byHand([config.roles.lagger], [])}`
+        : untag
+          ? await move(member.id, reader(ports, member), [config.roles.lagger], [], audit('lagger tag removed', staffId), ports.retryMs)
+          : undefined;
     const result = `One strike removed, now ${strikesLabel(r.tier)}${untag ? '; the lagger tag removed' : ''}`;
     const post: Post = { tone: 'changed', title: 'Lagger strike removed', facts: { member: targetId, result, ...withTodo(todo) } };
     return announce(ports, post, `Removed a lagger strike from <@${targetId}>; now ${strikesLabel(r.tier)}`, untag ? { id: targetId, text: dms.untagged(r.tier) } : undefined, todo);
@@ -221,8 +227,15 @@ export function expire(ports: Ports, targetId: string): Promise<void> {
   });
 }
 
+// A join no one could check is posted, so staff check it by hand.
+async function notChecked(ports: Ports, id: string, why: string): Promise<void> {
+  const todo = `${why}. Check their standing with /lookup and suspend them by hand if needed.`;
+  await ports.post({ tone: 'warning', title: 'Join not checked', facts: { member: id, todo } });
+}
+
 // A member who joins while suspended is suspended again, keeping the roles they came back with.
 export function joined(ports: Ports, member: Member): Promise<void> {
+  if (closing) return notChecked(ports, member.id, 'Lady Justice was restarting when this member joined');
   return turn(member.id, async () => {
     // A fresh read, as onboarding or another bot may have given roles since the join.
     const fresh = (await ports.member(member.id).catch(() => null)) ?? member;
@@ -232,9 +245,7 @@ export function joined(ports: Ports, member: Member): Promise<void> {
       r = await ports.api.applyPending(member.id, kept);
     } catch (error) {
       log.error(`join of ${member.id} not checked`, error);
-      const todo = "core-api could not check this member on joining. Check their standing with Auth's /lookup and suspend them by hand if needed.";
-      await ports.post({ tone: 'warning', title: 'Join not checked', facts: { member: member.id, todo } });
-      return;
+      return notChecked(ports, member.id, 'core-api could not check this member on joining');
     }
     if (r.lagger_tagged && !isTagged(fresh)) {
       const todo = await tag(ports, fresh, 'lagger tag applied on joining', null);

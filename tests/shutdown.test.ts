@@ -31,3 +31,11 @@ test('a shutdown waits for the turn in hand and takes no new one', async () => {
   await Promise.all([inHand, drained]);
   assert.deepEqual(order, ['recorded', 'drained']);
 });
+
+test('a join during a shutdown is posted for staff to check', async () => {
+  const posts: { title: string }[] = [];
+  const ports = { post: async (post: { title: string }) => (posts.push(post), true) } as unknown as Ports;
+  await flows.drained();
+  await flows.joined(ports, { id: '423456789012345678' } as never);
+  assert.equal(posts[0]?.title, 'Join not checked');
+});

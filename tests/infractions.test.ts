@@ -405,3 +405,26 @@ test('a tagged member who rejoins gets the tag back', async () => {
   assert.deepEqual(m.writes, [[LAGGER]]);
   assert.equal(h.posts[0]!.title, 'Lagger tag applied on joining');
 });
+
+test('removing a strike when Discord cannot read the member leaves the tag for staff to check', async () => {
+  const h = ports({ removeTier: { discord_id: MEMBER, category: 'lagger', tier: 2, was_changed: true } }, null);
+  const text = await flows.removeTier({ ...h.p, member: async () => Promise.reject(new Error('Discord unavailable')) }, STAFF, MEMBER, 'lagger');
+  assert.match(h.posts[0]!.facts.todo ?? '', new RegExp(`If they wear <@&${LAGGER}>: Set by hand: remove <@&${LAGGER}>`));
+  assert.match(text, /^⚠️/);
+});
+
+test('a days change for a member Discord cannot read still tries the DM and reports a miss', async () => {
+  const h = ports({ days: { discord_id: MEMBER, suspended: true, ends: ENDS } }, null, false);
+  const text = await flows.changeDays({ ...h.p, member: async () => Promise.reject(new Error('Discord unavailable')) }, STAFF, MEMBER, 2);
+  assert.equal(h.dms.length, 1);
+  assert.match(text, /DM did not reach them/);
+});
+
+test('a member who leaves before the roles are written leaves nothing for staff to set', async () => {
+  const m = member([CIV6]);
+  const gone = { ...m, roles: { ...m.roles, set: async () => Promise.reject(Object.assign(new Error('Unknown Member'), { code: 10007 })) } };
+  const h = ports({ tier: tier({}) }, gone);
+  const text = await flows.recordInfraction(h.p, STAFF, MEMBER, { kind: 'tier', category: 'quit' }, 'x');
+  assert.equal(h.posts[0]!.facts.todo, undefined);
+  assert.match(text, /^✅ Suspended/);
+});

@@ -114,7 +114,10 @@ client.on(Events.GuildMemberAdd, (member) => {
   joined(portsFor(member.guild), member).catch((error: unknown) => log.error(`join of ${member.id} not checked`, error));
 });
 
-// Takes no new command, lets the turns in hand finish for up to 10 seconds, then leaves Discord.
+// A turn can wait out two core-api attempts, then write roles, post and DM.
+const DRAIN_MS = 2 * config.backend.timeoutMs + 10_000;
+
+// Takes no new command, lets the turns in hand finish, then leaves Discord.
 export async function stop(): Promise<void> {
   accepting = false;
   stopping = true;
@@ -122,6 +125,6 @@ export async function stop(): Promise<void> {
     await stopExpiry?.();
     await drained();
   };
-  await Promise.race([finish(), wait(10_000, undefined, { ref: false })]);
+  await Promise.race([finish(), wait(DRAIN_MS, undefined, { ref: false })]);
   await client.destroy();
 }

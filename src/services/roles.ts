@@ -20,12 +20,13 @@ export async function memberOrNull<T>(fetch: () => Promise<T>): Promise<T | null
   try {
     return await fetch();
   } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === UNKNOWN_MEMBER) return null;
+    if (isUnknownMember(error)) return null;
     throw error;
   }
 }
 
 const rolesOf = (member: Member): string[] => [...member.roles.cache.keys()];
+const isUnknownMember = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === UNKNOWN_MEMBER;
 
 export const isSuspended = (member: Member): boolean => rolesOf(member).includes(config.roles.suspended);
 export const isTagged = (member: Member): boolean => rolesOf(member).includes(config.roles.lagger);
@@ -42,15 +43,20 @@ export function nextRoles(held: readonly string[], remove: readonly string[], ad
 export type Read = () => Promise<Member>;
 
 // One write with the member's whole role list from a fresh read, tried once more on a failure.
-async function setRoles(id: string, read: Read, remove: readonly string[], add: readonly string[], reason: string, retryMs: number): Promise<boolean> {
+// A member who left meanwhile has nothing to set: core-api's record applies when they join.
+async function setRoles(id: string, read: Read, remove: readonly string[], add: readonly string[], reason: string, retryMs: number): Promise<'set' | 'left' | 'failed'> {
   for (let attempt = 1; ; attempt++) {
     try {
       const member = await read();
       await member.roles.set(nextRoles(rolesOf(member), remove, add), reason);
-      return true;
+      return 'set';
     } catch (error) {
+      if (isUnknownMember(error)) {
+        log.info(`roles not set for ${id}: they left the server`);
+        return 'left';
+      }
       log.warn(`roles not set for ${id} (attempt ${attempt})`, error instanceof Error ? error.message : error);
-      if (attempt >= 2) return false;
+      if (attempt >= 2) return 'failed';
       await new Promise((resolve) => setTimeout(resolve, retryMs));
     }
   }
@@ -67,13 +73,14 @@ export const byHand = (remove: readonly string[], add: readonly string[]): strin
 // Takes the roles the bot may move; one it may not is left for staff rather than failing the rest.
 export async function suspend(id: string, read: Read, take: readonly string[], left: readonly string[], reason: string, retryMs = RETRY_MS): Promise<Todo> {
   const add = [config.roles.suspended];
-  if (!(await setRoles(id, read, take, add, reason, retryMs))) return byHand([...take, ...left], add);
-  return left.length ? `Remove by hand: ${mentions(left)}.` : undefined;
+  const result = await setRoles(id, read, take, add, reason, retryMs);
+  if (result === 'failed') return byHand([...take, ...left], add);
+  return result === 'set' && left.length ? `Remove by hand: ${mentions(left)}.` : undefined;
 }
 
 // Any other role change, named for staff when it did not land.
 export async function move(id: string, read: Read, remove: readonly string[], add: readonly string[], reason: string, retryMs = RETRY_MS): Promise<Todo> {
-  return (await setRoles(id, read, remove, add, reason, retryMs)) ? undefined : byHand(remove, add);
+  return (await setRoles(id, read, remove, add, reason, retryMs)) === 'failed' ? byHand(remove, add) : undefined;
 }
 
 // Gives back what the record kept, leaving to staff a role deleted since or one the bot may not give.
@@ -81,6 +88,6 @@ export async function release(id: string, read: Read, kept: readonly string[], c
   const give = kept.filter(canGive);
   const skipped = kept.filter((role) => !canGive(role));
   const remove = [config.roles.suspended];
-  if (!(await setRoles(id, read, remove, give, reason, retryMs))) return byHand(remove, kept);
+  if ((await setRoles(id, read, remove, give, reason, retryMs)) !== 'set') return byHand(remove, kept);
   return skipped.length ? `Give back by hand: ${mentions(skipped)}.` : undefined;
 }

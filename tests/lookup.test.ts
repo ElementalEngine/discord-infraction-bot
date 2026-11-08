@@ -40,3 +40,28 @@ test('the laggers list names the tagged first, then the strikes, and stays under
   assert.ok(long.length <= 2000);
   assert.match(long, /… and \d+ more$/);
 });
+
+test('a long laggers list counts what each section leaves out and names only who can show', async () => {
+  const id = (n: number): string => String(100000000000000000n + BigInt(n));
+  const members = [
+    ...Array.from({ length: 100 }, (_, i) => ({ discord_id: id(i), strikes: 3, tagged: true })),
+    ...Array.from({ length: 900 }, (_, i) => ({ discord_id: id(1000 + i), strikes: 1, tagged: false })),
+  ];
+  let asked = 0;
+  const p = { ...ports(null, { members }), names: async (ids: readonly string[]) => ((asked = ids.length), new Map<string, string>()) };
+  const text = await laggers(p);
+  const shown = text.split('\n').filter((line) => /`\d+`/.test(line)).length;
+  const more = [...text.matchAll(/… and (\d+) more/g)].reduce((sum, m) => sum + Number(m[1]), 0);
+  assert.ok(text.length <= 2000);
+  assert.equal(shown + more, 1000);
+  assert.match(text, /\*\*With strikes \(900\)\*\*/);
+  assert.ok(asked <= 100);
+});
+
+test('a lookup core-api does not answer asks for a retry, as nothing was written', async () => {
+  const { NoAnswer } = await import('../src/api/errors.js');
+  const { Refusal } = await import('../src/ui/failure.js');
+  const lost = { ...ports(null, null), api: { record: async () => Promise.reject(new NoAnswer(new TypeError('terminated'))), laggers: async () => Promise.reject(new NoAnswer(new TypeError('terminated'))) } as unknown as Ports['api'] };
+  await assert.rejects(lookup(lost, MEMBER), (error: unknown) => error instanceof Refusal && /Try again/.test(error.message));
+  await assert.rejects(laggers(lost), Refusal);
+});

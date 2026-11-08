@@ -17,7 +17,7 @@ export function refuse(message: string): never {
 export const unreachable = (error: unknown): boolean => error instanceof NoAnswer;
 
 // A write whose answer never came may have landed, so staff check before repeating it.
-const UNKNOWN = "⚠️ core-api didn't answer, so this may or may not be recorded. Check the member's standing with Auth's /lookup before running it again.";
+const UNKNOWN = "⚠️ core-api didn't answer, so this may or may not be recorded. Check the member's standing with /lookup before running it again.";
 
 export type Failure = Readonly<{ text: string; ours: boolean }>;
 
