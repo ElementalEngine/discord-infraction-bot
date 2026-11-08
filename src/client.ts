@@ -11,6 +11,7 @@ import { startExpiry } from './services/expiry.js';
 import { drained, expire, joined, type Ports } from './services/infractions.js';
 import { memberOrNull } from './services/roles.js';
 import { checkAccess, joinsUnseen, setupProblems } from './services/setup.js';
+import { startWatch, type Watch } from './services/watch.js';
 import { failureOf } from './ui/failure.js';
 import { render, type Post } from './ui/posts.js';
 import { answer, defer } from './ui/reply.js';
@@ -18,10 +19,10 @@ import { log } from './utils/log.js';
 
 const COMMANDS = new Map([infraction, admin, lookup].map((command) => [command.data.name, command]));
 
-// The server's join message stands in for the join event, which needs the
-// privileged Server Members intent; no message is kept.
+// The server's join message and the watch stand in for the join event, which
+// needs the privileged Server Members intent; no message is kept.
 export const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
   makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 0 }),
 });
 
@@ -85,6 +86,7 @@ async function route(interaction: ChatInputCommandInteraction): Promise<void> {
 }
 
 let stopExpiry: (() => Promise<void>) | null = null;
+let watch: Watch | null = null;
 // Commands wait until setup is checked, so none runs on a bot about to stop.
 let accepting = false;
 let stopping = false;
@@ -97,11 +99,12 @@ async function ready(bot: Client<true>): Promise<void> {
   await bot.application.commands.set([...COMMANDS.values()].map((command) => command.data.toJSON()), guild.id);
   await checkAccess(bot, guild).catch((error: unknown) => log.warn('command access not checked', error));
   const unseen = joinsUnseen(guild);
-  if (unseen) log.warn(`${unseen}: a suspended member who rejoins is not suspended again`);
+  if (unseen) log.warn(`${unseen}: a suspended member who rejoins is found by the watch instead`);
   const ports = portsFor(guild);
   stopExpiry = startExpiry({ due: () => api.due(), expire: (id) => expire(ports, id) });
+  watch = startWatch({ suspended: () => api.suspended(), member: (id) => memberOf(guild, id), joined: (member) => joined(ports, member) });
   accepting = true;
-  log.info(`Lady Justice ready as ${bot.user.tag}: ${COMMANDS.size} commands, expiry running`);
+  log.info(`Lady Justice ready as ${bot.user.tag}: ${COMMANDS.size} commands, expiry and watch running`);
 }
 
 client.once(Events.ClientReady, (bot) => {
@@ -121,8 +124,16 @@ async function onJoin(message: Message<true>): Promise<void> {
 }
 
 client.on(Events.MessageCreate, (message) => {
-  if (message.type !== MessageType.UserJoin || !message.inGuild() || message.guildId !== config.discord.guildId) return;
+  if (!message.inGuild() || message.guildId !== config.discord.guildId) return;
+  if (message.type !== MessageType.UserJoin) {
+    if (message.member) watch?.seen(message.member);
+    return;
+  }
   onJoin(message).catch((error: unknown) => log.error(`join of ${message.author.id} not checked`, error));
+});
+
+client.on(Events.VoiceStateUpdate, (_, state) => {
+  if (state.guild.id === config.discord.guildId && state.member) watch?.seen(state.member);
 });
 
 // A turn can wait out two core-api attempts, then write roles, post and DM.
@@ -133,7 +144,7 @@ export async function stop(): Promise<void> {
   accepting = false;
   stopping = true;
   const finish = async (): Promise<void> => {
-    await stopExpiry?.();
+    await Promise.all([stopExpiry?.(), watch?.stop()]);
     await drained();
   };
   await Promise.race([finish(), wait(DRAIN_MS, undefined, { ref: false })]);

@@ -14,4 +14,5 @@ export type DueSuspensions = Schemas['DueSuspensions'];
 export type PendingApplied = Schemas['PendingApplied'];
 export type SuspensionRecord = Schemas['SuspensionRecord'];
 export type Laggers = Schemas['Laggers'];
+export type Suspended = Schemas['Suspended'];
 export type ErrorDetail = Schemas['ErrorDetail'];

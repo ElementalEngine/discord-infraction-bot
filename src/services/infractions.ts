@@ -252,7 +252,8 @@ export function joined(ports: Ports, member: Member): Promise<void> {
       log.info(`lagger tag applied on joining for ${member.id}`);
       await announce(ports, { tone: 'warning', title: 'Lagger tag applied on joining', facts: { member: member.id, ...withTodo(todo) } }, 'applied', undefined, todo);
     }
-    if (!r.applied) return;
+    // One already marked, as the watch may see a member mid-change, needs nothing more.
+    if (!r.applied || isSuspended(fresh)) return;
     const infraction = kindLabel(r.punishment_type);
     const todo = await suspend(member.id, reader(ports, fresh), take, left, audit('suspension applied on joining', null), ports.retryMs);
     const post: Post = {

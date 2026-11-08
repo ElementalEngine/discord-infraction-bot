@@ -211,6 +211,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/infractions/suspended": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suspended */
+        get: operations["suspended_api_v2_infractions_suspended_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/infractions/{discord_id}": {
         parameters: {
             query?: never;
@@ -2245,6 +2262,11 @@ export interface components {
             id: string;
             /** Options */
             options: components["schemas"]["SettingOption"][];
+            /**
+             * Standard Draft Only
+             * @default false
+             */
+            standard_draft_only: boolean;
             /** Title */
             title: string;
         };
@@ -2349,6 +2371,11 @@ export interface components {
          * @enum {string}
          */
         SupportedGame: "civ6" | "civ7";
+        /** Suspended */
+        Suspended: {
+            /** Discord Ids */
+            discord_ids: string[];
+        };
         /**
          * SuspensionCleared
          * @description A suspension ended, with the roles the bot should give back; `suspended`
@@ -3049,6 +3076,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Laggers"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspended_api_v2_infractions_suspended_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suspended"];
                 };
             };
             /** @description Validation Error */

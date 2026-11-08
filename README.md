@@ -27,9 +27,10 @@ Answers to staff are private; every outcome is posted in the suspended channel.
 
 - A member not in the server is suspended when they join, and so is one who
   leaves and rejoins while suspended; a tagged lagger who rejoins is tagged again.
-  Joins are seen through the server's join messages, so the system messages
-  channel must post them where the bot can see; startup warns if it cannot.
-  The bot uses no privileged intent.
+  Joins are seen through the server's join messages, which Discord does not
+  always post, so a watch also finds a serving member without the Suspended
+  role: at once on a message or voice change, else within one read every 15
+  seconds in turn. The bot uses no privileged intent.
 - Suspensions end on their own: the bot asks core-api what is due and when the
   next one ends, and checks at least once a minute. Nothing is kept in memory.
 - At startup the bot checks the channels, every role it moves, that those roles
