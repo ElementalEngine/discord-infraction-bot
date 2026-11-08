@@ -1,4 +1,4 @@
-import { PermissionFlagsBits, type Client, type Guild } from 'discord.js';
+import { GuildSystemChannelFlags, PermissionFlagsBits, type Client, type Guild } from 'discord.js';
 
 import { driftOf } from '../config/access.js';
 import { config } from '../config/index.js';
@@ -38,6 +38,16 @@ export async function setupProblems(guild: Guild): Promise<string[]> {
     }
   }
   return problems;
+}
+
+// Joins are seen through the server's join messages, in its system channel.
+export function joinsUnseen(guild: Guild): string | null {
+  const channel = guild.systemChannel;
+  if (!channel) return 'the server has no system messages channel';
+  if (guild.systemChannelFlags.has(GuildSystemChannelFlags.SuppressJoinNotifications)) return 'the server does not post join messages';
+  const me = guild.members.me;
+  if (!me || !channel.permissionsFor(me).has(PermissionFlagsBits.ViewChannel)) return `the bot cannot see #${channel.name}, where join messages are posted`;
+  return null;
 }
 
 // Compares the access table with the server's Integrations and logs what differs.

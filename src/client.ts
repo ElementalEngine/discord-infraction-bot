@@ -1,6 +1,6 @@
 import { setTimeout as wait } from 'node:timers/promises';
 
-import { Client, Events, GatewayIntentBits, type ChatInputCommandInteraction, type Guild, type GuildMember } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageType, Options, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message } from 'discord.js';
 
 import { api } from './api/client.js';
 import * as admin from './commands/admin.js';
@@ -10,7 +10,7 @@ import { config } from './config/index.js';
 import { startExpiry } from './services/expiry.js';
 import { drained, expire, joined, type Ports } from './services/infractions.js';
 import { memberOrNull } from './services/roles.js';
-import { checkAccess, setupProblems } from './services/setup.js';
+import { checkAccess, joinsUnseen, setupProblems } from './services/setup.js';
 import { failureOf } from './ui/failure.js';
 import { render, type Post } from './ui/posts.js';
 import { answer, defer } from './ui/reply.js';
@@ -18,8 +18,12 @@ import { log } from './utils/log.js';
 
 const COMMANDS = new Map([infraction, admin, lookup].map((command) => [command.data.name, command]));
 
-// Server Members brings the join event, which suspends a returning member again.
-export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+// The server's join message stands in for the join event, which needs the
+// privileged Server Members intent; no message is kept.
+export const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 0 }),
+});
 
 const memberOf = (guild: Guild, id: string): Promise<GuildMember | null> => memberOrNull(() => guild.members.fetch({ user: id, force: true }));
 
@@ -92,6 +96,8 @@ async function ready(bot: Client<true>): Promise<void> {
   if (problems.length) throw new Error(`setup is not right:\n  ${problems.join('\n  ')}`);
   await bot.application.commands.set([...COMMANDS.values()].map((command) => command.data.toJSON()), guild.id);
   await checkAccess(bot, guild).catch((error: unknown) => log.warn('command access not checked', error));
+  const unseen = joinsUnseen(guild);
+  if (unseen) log.warn(`${unseen}: a suspended member who rejoins is not suspended again`);
   const ports = portsFor(guild);
   stopExpiry = startExpiry({ due: () => api.due(), expire: (id) => expire(ports, id) });
   accepting = true;
@@ -109,9 +115,14 @@ client.on(Events.InteractionCreate, (interaction) => {
   if (interaction.isChatInputCommand()) void route(interaction);
 });
 
-client.on(Events.GuildMemberAdd, (member) => {
-  if (member.guild.id !== config.discord.guildId) return;
-  joined(portsFor(member.guild), member).catch((error: unknown) => log.error(`join of ${member.id} not checked`, error));
+async function onJoin(message: Message<true>): Promise<void> {
+  const member = message.member ?? (await memberOf(message.guild, message.author.id));
+  if (member) await joined(portsFor(message.guild), member);
+}
+
+client.on(Events.MessageCreate, (message) => {
+  if (message.type !== MessageType.UserJoin || !message.inGuild() || message.guildId !== config.discord.guildId) return;
+  onJoin(message).catch((error: unknown) => log.error(`join of ${message.author.id} not checked`, error));
 });
 
 // A turn can wait out two core-api attempts, then write roles, post and DM.
