@@ -9,7 +9,7 @@ import { byHand, isHost, isSuspended, isTagged, move, movedRolesOf, release, sus
 
 // What the flows reach outside themselves, so a test can stand each one in.
 export type Ports = Readonly<{
-  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending' | 'record' | 'laggers'>;
+  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending' | 'record' | 'laggers' | 'suspended'>;
   // The member, null when they are not in the server; throws when Discord cannot say.
   member(id: string): Promise<Member | null>;
   canGive(roleId: string): boolean;
@@ -233,10 +233,15 @@ async function notChecked(ports: Ports, id: string, why: string): Promise<void> 
   await ports.post({ tone: 'warning', title: 'Join not checked', facts: { member: id, todo } });
 }
 
+// The join event and the startup check can hand over the same member; only the first acts.
+const joining = new Set<string>();
+
 // A member who joins while suspended is suspended again, keeping the roles they came back with.
 export function joined(ports: Ports, member: Member): Promise<void> {
   if (closing) return notChecked(ports, member.id, 'Lady Justice was restarting when this member joined');
-  return turn(member.id, async () => {
+  if (joining.has(member.id)) return Promise.resolve();
+  joining.add(member.id);
+  const running = turn(member.id, async () => {
     // A fresh read, as onboarding or another bot may have given roles since the join.
     const fresh = (await ports.member(member.id).catch(() => null)) ?? member;
     const { kept, take, left } = rolesToTake(ports, fresh);
@@ -252,7 +257,7 @@ export function joined(ports: Ports, member: Member): Promise<void> {
       log.info(`lagger tag applied on joining for ${member.id}`);
       await announce(ports, { tone: 'warning', title: 'Lagger tag applied on joining', facts: { member: member.id, ...withTodo(todo) } }, 'applied', undefined, todo);
     }
-    // One already marked, as the watch may see a member mid-change, needs nothing more.
+    // One already marked needs nothing more.
     if (!r.applied || isSuspended(fresh)) return;
     const infraction = kindLabel(r.punishment_type);
     const todo = await suspend(member.id, reader(ports, fresh), take, left, audit('suspension applied on joining', null), ports.retryMs);
@@ -264,4 +269,18 @@ export function joined(ports: Ports, member: Member): Promise<void> {
     log.info(`suspension applied on joining for ${member.id}`);
     await announce(ports, post, 'applied', { id: member.id, text: dms.rejoined(infraction, r.held ? null : r.ends) }, todo);
   });
+  const done = (): void => void joining.delete(member.id);
+  running.then(done, done);
+  return running;
+}
+
+// At startup: a serving member in the server without the Suspended role came back
+// while the bot was down, so they are checked as a join. Returns how many were.
+export async function rejoinedWhileAway(ports: Ports, members: (ids: readonly string[]) => Promise<readonly Member[]>): Promise<number> {
+  const back = (await members((await ports.api.suspended()).discord_ids)).filter((member) => !isSuspended(member));
+  for (const member of back) {
+    if (closing) break;
+    await joined(ports, member);
+  }
+  return back.length;
 }

@@ -1,6 +1,6 @@
 import { setTimeout as wait } from 'node:timers/promises';
 
-import { Client, Events, GatewayIntentBits, MessageType, Options, type ChatInputCommandInteraction, type Guild, type GuildMember, type Message } from 'discord.js';
+import { Client, Events, GatewayIntentBits, type ChatInputCommandInteraction, type Guild, type GuildMember } from 'discord.js';
 
 import { api } from './api/client.js';
 import * as admin from './commands/admin.js';
@@ -8,10 +8,9 @@ import * as infraction from './commands/infraction.js';
 import * as lookup from './commands/lookup.js';
 import { config } from './config/index.js';
 import { startExpiry } from './services/expiry.js';
-import { drained, expire, joined, type Ports } from './services/infractions.js';
+import { drained, expire, joined, rejoinedWhileAway, type Ports } from './services/infractions.js';
 import { memberOrNull } from './services/roles.js';
-import { checkAccess, joinsUnseen, setupProblems } from './services/setup.js';
-import { startWatch, type Watch } from './services/watch.js';
+import { checkAccess, setupProblems } from './services/setup.js';
 import { failureOf } from './ui/failure.js';
 import { render, type Post } from './ui/posts.js';
 import { answer, defer } from './ui/reply.js';
@@ -19,12 +18,8 @@ import { log } from './utils/log.js';
 
 const COMMANDS = new Map([infraction, admin, lookup].map((command) => [command.data.name, command]));
 
-// The server's join message and the watch stand in for the join event, which
-// needs the privileged Server Members intent; no message is kept.
-export const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
-  makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 0 }),
-});
+// Server Members brings the join event, which suspends a returning member again.
+export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
 const memberOf = (guild: Guild, id: string): Promise<GuildMember | null> => memberOrNull(() => guild.members.fetch({ user: id, force: true }));
 
@@ -52,12 +47,9 @@ async function dm(id: string, text: string): Promise<boolean> {
 }
 
 // Discord answers up to 100 members a fetch; one who left is left out.
-async function names(guild: Guild, ids: readonly string[]): Promise<ReadonlyMap<string, string>> {
-  const found = new Map<string, string>();
-  for (let i = 0; i < ids.length; i += 100) {
-    const members = await guild.members.fetch({ user: [...ids.slice(i, i + 100)] });
-    for (const member of members.values()) found.set(member.id, member.displayName);
-  }
+async function membersOf(guild: Guild, ids: readonly string[]): Promise<GuildMember[]> {
+  const found: GuildMember[] = [];
+  for (let i = 0; i < ids.length; i += 100) found.push(...(await guild.members.fetch({ user: [...ids.slice(i, i + 100)] })).values());
   return found;
 }
 
@@ -67,7 +59,7 @@ const portsFor = (guild: Guild): Ports => ({
   canGive: (id) => guild.roles.cache.get(id)?.editable === true,
   post: (message) => post(guild, message),
   dm,
-  names: (ids) => names(guild, ids),
+  names: async (ids) => new Map((await membersOf(guild, ids)).map((member) => [member.id, member.displayName] as const)),
 });
 
 // Every command ends in a private answer: what was done, or why not.
@@ -86,7 +78,6 @@ async function route(interaction: ChatInputCommandInteraction): Promise<void> {
 }
 
 let stopExpiry: (() => Promise<void>) | null = null;
-let watch: Watch | null = null;
 // Commands wait until setup is checked, so none runs on a bot about to stop.
 let accepting = false;
 let stopping = false;
@@ -98,13 +89,14 @@ async function ready(bot: Client<true>): Promise<void> {
   if (problems.length) throw new Error(`setup is not right:\n  ${problems.join('\n  ')}`);
   await bot.application.commands.set([...COMMANDS.values()].map((command) => command.data.toJSON()), guild.id);
   await checkAccess(bot, guild).catch((error: unknown) => log.warn('command access not checked', error));
-  const unseen = joinsUnseen(guild);
-  if (unseen) log.warn(`${unseen}: a suspended member who rejoins is found by the watch instead`);
   const ports = portsFor(guild);
   stopExpiry = startExpiry({ due: () => api.due(), expire: (id) => expire(ports, id) });
-  watch = startWatch({ suspended: () => api.suspended(), member: (id) => memberOf(guild, id), joined: (member) => joined(ports, member) });
   accepting = true;
-  log.info(`Lady Justice ready as ${bot.user.tag}: ${COMMANDS.size} commands, expiry and watch running`);
+  log.info(`Lady Justice ready as ${bot.user.tag}: ${COMMANDS.size} commands, expiry running`);
+  rejoinedWhileAway(ports, (ids) => membersOf(guild, ids)).then(
+    (back) => log.info(`startup check: ${back} serving member(s) back without the Suspended role`),
+    (error: unknown) => log.warn('startup check of serving members not made', error),
+  );
 }
 
 client.once(Events.ClientReady, (bot) => {
@@ -118,22 +110,9 @@ client.on(Events.InteractionCreate, (interaction) => {
   if (interaction.isChatInputCommand()) void route(interaction);
 });
 
-async function onJoin(message: Message<true>): Promise<void> {
-  const member = message.member ?? (await memberOf(message.guild, message.author.id));
-  if (member) await joined(portsFor(message.guild), member);
-}
-
-client.on(Events.MessageCreate, (message) => {
-  if (!message.inGuild() || message.guildId !== config.discord.guildId) return;
-  if (message.type !== MessageType.UserJoin) {
-    if (message.member) watch?.seen(message.member);
-    return;
-  }
-  onJoin(message).catch((error: unknown) => log.error(`join of ${message.author.id} not checked`, error));
-});
-
-client.on(Events.VoiceStateUpdate, (_, state) => {
-  if (state.guild.id === config.discord.guildId && state.member) watch?.seen(state.member);
+client.on(Events.GuildMemberAdd, (member) => {
+  if (member.guild.id !== config.discord.guildId) return;
+  joined(portsFor(member.guild), member).catch((error: unknown) => log.error(`join of ${member.id} not checked`, error));
 });
 
 // A turn can wait out two core-api attempts, then write roles, post and DM.
@@ -144,7 +123,7 @@ export async function stop(): Promise<void> {
   accepting = false;
   stopping = true;
   const finish = async (): Promise<void> => {
-    await Promise.all([stopExpiry?.(), watch?.stop()]);
+    await stopExpiry?.();
     await drained();
   };
   await Promise.race([finish(), wait(DRAIN_MS, undefined, { ref: false })]);
