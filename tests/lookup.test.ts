@@ -6,6 +6,7 @@ import type { Ports } from '../src/services/infractions.js';
 import './env.js';
 
 const { laggers, lookup } = await import('../src/services/lookup.js');
+const { parts } = await import('../src/ui/reply.js');
 
 const MEMBER = '123456789012345678';
 const GONE = '323456789012345678';
@@ -31,17 +32,17 @@ test('a lookup shows the suspension, the tiers and the strikes', async () => {
   assert.equal(clean, ['**not in the server `323456789012345678`**', 'Suspension: none', 'Tiers: none', 'Lagger: no strikes'].join('\n'));
 });
 
-test('the laggers list names the tagged first, then the strikes, and stays under the answer limit', async () => {
+test('the laggers list names the tagged first, then the strikes, and leaves no one out', async () => {
   const text = await laggers(ports(null, { members: [{ discord_id: MEMBER, strikes: 3, tagged: true }, { discord_id: GONE, strikes: 1, tagged: false }] }));
   assert.equal(text, ['**Tagged (1)**', 'Cisco `123456789012345678`', '**With strikes (1)**', 'not in the server `323456789012345678`: strike 1 of 3'].join('\n'));
   assert.equal(await laggers(ports(null, { members: [] })), 'No member has a lagger strike.');
   const many = Array.from({ length: 200 }, (_, i) => ({ discord_id: String(100000000000000000 + i), strikes: 1, tagged: false }));
   const long = await laggers(ports(null, { members: many }));
-  assert.ok(long.length <= 2000);
-  assert.match(long, /… and \d+ more$/);
+  assert.equal(long.split('\n').length, 202);
+  assert.doesNotMatch(long, /more/);
 });
 
-test('a long laggers list counts what each section leaves out and names only who can show', async () => {
+test('a long laggers list names every member and goes out as messages Discord takes', async () => {
   const id = (n: number): string => String(100000000000000000n + BigInt(n));
   const members = [
     ...Array.from({ length: 100 }, (_, i) => ({ discord_id: id(i), strikes: 3, tagged: true })),
@@ -50,12 +51,14 @@ test('a long laggers list counts what each section leaves out and names only who
   let asked = 0;
   const p = { ...ports(null, { members }), names: async (ids: readonly string[]) => ((asked = ids.length), new Map<string, string>()) };
   const text = await laggers(p);
-  const shown = text.split('\n').filter((line) => /`\d+`/.test(line)).length;
-  const more = [...text.matchAll(/… and (\d+) more/g)].reduce((sum, m) => sum + Number(m[1]), 0);
-  assert.ok(text.length <= 2000);
-  assert.equal(shown + more, 1000);
+  assert.equal(text.split('\n').filter((line) => /`\d+`/.test(line)).length, 1000);
   assert.match(text, /\*\*With strikes \(900\)\*\*/);
-  assert.ok(asked <= 100);
+  assert.equal(asked, 1000);
+  const sent = parts(text);
+  assert.ok(sent.length > 1 && sent.every((part) => part.length <= 2000));
+  assert.equal(sent.join('\n'), text);
+  assert.deepEqual(parts('short'), ['short']);
+  assert.deepEqual(parts('abcdef', 4), ['abcd', 'ef']);
 });
 
 test('a lookup core-api does not answer asks for a retry, as nothing was written', async () => {

@@ -3,11 +3,6 @@ import { refuse, unreachable } from '../ui/failure.js';
 import { strikesLabel, when } from '../ui/posts.js';
 import type { Ports } from './infractions.js';
 
-// Discord shows up to 2,000 characters in an answer, so under 100 members, the
-// most one name fetch reads; room is kept for a cut list's tail and the next header.
-const ANSWER_MAX = 1900;
-const TAIL = 80;
-const SHOWN_MAX = 100;
 const CATEGORIES: readonly TierCategory[] = ['quit', 'minor', 'moderate', 'major', 'extreme'];
 
 // An unanswered read changed nothing, so staff need only try again.
@@ -30,29 +25,18 @@ export async function lookup(ports: Ports, targetId: string): Promise<string> {
   ].join('\n');
 }
 
-// Everyone with a lagger strike: the tagged first, then the rest with their count;
-// a section cut short says how many of it are left.
+// Everyone with a lagger strike: the tagged first, then the rest with their count.
+// The whole list, however long: the answer goes out in as many messages as it takes.
 export async function laggers(ports: Ports): Promise<string> {
   const { members } = await read(ports.api.laggers());
   if (!members.length) return 'No member has a lagger strike.';
   const tagged = members.filter((m) => m.tagged);
   const rest = members.filter((m) => !m.tagged);
-  const names = await ports.names([...tagged, ...rest].slice(0, SHOWN_MAX).map((m) => m.discord_id));
-  const sections = [
-    { header: `**Tagged (${tagged.length})**`, lines: tagged.map((m) => named(names, m.discord_id)) },
-    { header: `**With strikes (${rest.length})**`, lines: rest.map((m) => `${named(names, m.discord_id)}: ${strikesLabel(m.strikes)}`) },
-  ];
-  let text = '';
-  const put = (line: string): void => void (text += (text ? '\n' : '') + line);
-  for (const { header, lines } of sections) {
-    put(header);
-    for (const [i, line] of lines.entries()) {
-      if (text.length + line.length + 1 > ANSWER_MAX - TAIL) {
-        put(`… and ${lines.length - i} more`);
-        break;
-      }
-      put(line);
-    }
-  }
-  return text;
+  const names = await ports.names(members.map((m) => m.discord_id));
+  return [
+    `**Tagged (${tagged.length})**`,
+    ...tagged.map((m) => named(names, m.discord_id)),
+    `**With strikes (${rest.length})**`,
+    ...rest.map((m) => `${named(names, m.discord_id)}: ${strikesLabel(m.strikes)}`),
+  ].join('\n');
 }
