@@ -16,7 +16,7 @@ rules; this bot is the Discord side.
 | `/infraction tier lagger` | a lagger report: three tag the member (the Lagger role on, the Host role off), with no suspension and no decay |
 | `/infraction flat <smurf, oversub, comp>` | a flat suspension |
 | `/admin unsuspend`, `/admin modify-days`, `/admin remove-tier` | lift, lengthen or shorten, or remove a tier or a lagger strike; below three strikes the tag comes off |
-| `/lookup [member]` | a member's record and strikes; without a member, everyone with a strike |
+| `/lookup type [member]` | everyone with lagger strikes, or with a quit, minor, moderate, major or extreme tier; `record` with a member gives that member's whole record |
 
 All three are for staff (the moderator and backend roles) in the suspended channel,
 `/lookup` in the bot-commands channel too, hidden from everyone else until an admin grants them in Integrations. Access is

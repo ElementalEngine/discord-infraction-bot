@@ -1,6 +1,6 @@
 import { config } from '../config/index.js';
 import { ApiError, NoAnswer } from './errors.js';
-import type { DaysResult, DueSuspensions, FlatResult, FlatType, Laggers, PendingApplied, Suspended, SuspensionCleared, SuspensionRecord, TierCategory, TierRemoved, TierResult } from './types.js';
+import type { DaysResult, DueSuspensions, FlatResult, FlatType, Laggers, Ladder, PendingApplied, Suspended, SuspensionCleared, SuspensionRecord, TierCategory, TierMembers, TierRemoved, TierResult } from './types.js';
 
 // The retry policy lives here and nowhere else: no call site chooses.
 const ATTEMPTS = 2;
@@ -75,6 +75,7 @@ export function createApi(
     due: () => call<DueSuspensions>({ method: 'GET', parts: ['due'] }),
     record: (id: string) => call<SuspensionRecord>({ method: 'GET', parts: [id] }),
     laggers: () => call<Laggers>({ method: 'GET', parts: ['laggers'] }),
+    tierMembers: (category: Ladder) => call<TierMembers>({ method: 'GET', parts: ['tiers', category] }),
     suspended: () => call<Suspended>({ method: 'GET', parts: ['suspended'] }),
     tier: (id: string, category: TierCategory, actor: string, reason: string | null, roles: readonly string[]) =>
       call<TierResult>({ method: 'POST', parts: [id, 'tier', category], actor, body: { reason, suspended_roles: roles } }),

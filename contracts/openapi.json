@@ -218,7 +218,7 @@
             "type": "string"
           },
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           },
@@ -3297,6 +3297,45 @@
         "title": "TierCategory",
         "type": "string"
       },
+      "TierMember": {
+        "properties": {
+          "discord_id": {
+            "title": "Discord Id",
+            "type": "string"
+          },
+          "held": {
+            "title": "Held",
+            "type": "boolean"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discord_id",
+          "tier",
+          "held"
+        ],
+        "title": "TierMember",
+        "type": "object"
+      },
+      "TierMembers": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/TierMember"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "title": "TierMembers",
+        "type": "object"
+      },
       "TierRemoved": {
         "properties": {
           "category": {
@@ -3678,6 +3717,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -4799,6 +4845,71 @@
           }
         },
         "summary": "Suspended",
+        "tags": [
+          "infractions-v2"
+        ]
+      }
+    },
+    "/api/v2/infractions/tiers/{category}": {
+      "get": {
+        "operationId": "tier_members_api_v2_infractions_tiers__category__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category",
+            "required": true,
+            "schema": {
+              "enum": [
+                "quit",
+                "minor",
+                "moderate",
+                "major",
+                "extreme"
+              ],
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TierMembers"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tier Members",
         "tags": [
           "infractions-v2"
         ]
@@ -6594,7 +6705,7 @@
     },
     "/api/v2/match-setups/lobbies/{lobby_id}/tally": {
       "post": {
-        "description": "Settle the settings put to the vote, count the bans and deal the draft.\nThe bot counts, acting as the host, once all finish or the time is up.",
+        "description": "Settle the settings put to the vote, count the bans and deal the draft.\nThe bot counts, acting as the host, once all finish or the time is up; a\nvote not every player finished is cancelled.",
         "operationId": "tally_vote_api_v2_match_setups_lobbies__lobby_id__tally_post",
         "parameters": [
           {
@@ -7469,7 +7580,7 @@
     },
     "/api/v2/match-setups/votes/{vote_id}/tally": {
       "post": {
-        "description": "Count the settings, the draft mode and the bans, and deal the draft. The\nbot counts, acting as the host, once all finish or the time is up.",
+        "description": "Count the settings, the draft mode and the bans, and deal the draft. The\nbot counts, acting as the host, once all finish or the time is up; a vote\nnot every player finished is cancelled.",
         "operationId": "tally_vote_api_v2_match_setups_votes__vote_id__tally_post",
         "parameters": [
           {

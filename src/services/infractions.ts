@@ -9,7 +9,7 @@ import { byHand, isHost, isSuspended, isTagged, move, movedRolesOf, release, sus
 
 // What the flows reach outside themselves, so a test can stand each one in.
 export type Ports = Readonly<{
-  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending' | 'record' | 'laggers' | 'suspended'>;
+  api: Pick<Api, 'tier' | 'flat' | 'days' | 'removeTier' | 'unsuspend' | 'expire' | 'setPending' | 'applyPending' | 'record' | 'laggers' | 'tierMembers' | 'suspended'>;
   // The member, null when they are not in the server; throws when Discord cannot say.
   member(id: string): Promise<Member | null>;
   canGive(roleId: string): boolean;

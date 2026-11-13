@@ -9,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const spec = join(root, 'contracts/openapi.json');
 const provenance = join(root, 'contracts/PROVENANCE');
 const out = join(root, 'src/api/contract.ts');
-const CORE = '/opt/development/apps/core-api-backend';
+const CORE = '/opt/development/cpl/apps/core-api-backend';
 
 const git = (...args) => execFileSync('git', ['-C', CORE, ...args], { encoding: 'utf8' }).trim();
 

@@ -1,6 +1,6 @@
 source-repo: ElementalEngine/core-api-backend
-source-sha: 4fb1b4a
-source-date: 2026-11-08
+source-sha: 3ffbcc8
+source-date: 2026-11-13
 
 generated-by: npm run gen:contracts
 

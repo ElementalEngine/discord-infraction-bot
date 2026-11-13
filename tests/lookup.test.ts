@@ -5,15 +5,15 @@ import type { Ports } from '../src/services/infractions.js';
 
 import './env.js';
 
-const { laggers, lookup } = await import('../src/services/lookup.js');
+const { laggers, lookup, tierMembers } = await import('../src/services/lookup.js');
 const { parts } = await import('../src/ui/reply.js');
 
 const MEMBER = '123456789012345678';
 const GONE = '323456789012345678';
 
-function ports(record: unknown, list: unknown): Ports {
+function ports(record: unknown, list: unknown, tiers: unknown = null): Ports {
   return {
-    api: { record: async () => record, laggers: async () => list } as unknown as Ports['api'],
+    api: { record: async () => record, laggers: async () => list, tierMembers: async () => tiers } as unknown as Ports['api'],
     member: async () => null,
     canGive: () => true,
     post: async () => true,
@@ -40,6 +40,12 @@ test('the laggers list names the tagged first, then the strikes, and leaves no o
   const long = await laggers(ports(null, { members: many }));
   assert.equal(long.split('\n').length, 202);
   assert.doesNotMatch(long, /more/);
+});
+
+test('a tier list names every member at that tier, the highest first, and marks a hold', async () => {
+  const text = await tierMembers(ports(null, null, { members: [{ discord_id: MEMBER, tier: 6, held: true }, { discord_id: GONE, tier: 2, held: false }] }), 'quit');
+  assert.equal(text, ['**Quit (2)**', 'Cisco `123456789012345678`: quit 6, held at the ban threshold', 'not in the server `323456789012345678`: quit 2'].join('\n'));
+  assert.equal(await tierMembers(ports(null, null, { members: [] }), 'major'), 'No member has a major tier.');
 });
 
 test('a long laggers list names every member and goes out as messages Discord takes', async () => {
