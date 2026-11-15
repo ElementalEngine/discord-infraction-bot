@@ -2,7 +2,7 @@ import type { Api } from '../api/client.js';
 import type { FlatType, PendingApplied, SuspensionCleared, TierCategory } from '../api/types.js';
 import { config } from '../config/index.js';
 import { refuse } from '../ui/failure.js';
-import { daysLabel, dms, flatLabel, kindLabel, strikeLabel, strikesLabel, tierLabel, type Post } from '../ui/posts.js';
+import { daysLabel, dms, flatLabel, kindLabel, strikeLabel, strikesLabel, tierLabel, who, type Post } from '../ui/posts.js';
 import { log } from '../utils/log.js';
 import { serial } from '../utils/serial.js';
 import { byHand, isHost, isSuspended, isTagged, move, movedRolesOf, release, suspend, type Member, type Read, type Todo } from './roles.js';
@@ -98,7 +98,7 @@ function strike(ports: Ports, staffId: string, targetId: string, reason: string 
     const facts = { member: targetId, infraction, reason };
     if (!r.is_ban_threshold) {
       const post: Post = { tone: 'warning', title: 'Lagger strike', facts: { ...facts, result: 'Strike recorded', ...(member ? {} : { todo: 'Not in the server.' }) } };
-      return announce(ports, post, `Recorded ${infraction.toLowerCase()} for <@${targetId}>`, member ? { id: targetId, text: dms.strike(r.tier, reason) } : undefined, undefined);
+      return announce(ports, post, `Recorded ${infraction.toLowerCase()} for ${who(targetId)}`, member ? { id: targetId, text: dms.strike(r.tier, reason) } : undefined, undefined);
     }
     const already = member !== null && isTagged(member);
     const hosted = member !== null && isHost(member);
@@ -106,7 +106,7 @@ function strike(ports: Ports, staffId: string, targetId: string, reason: string 
     const result = already ? 'Already tagged as a lagger' : `Tagged as a lagger${hosted ? '; the host role removed' : ''}`;
     const post: Post = { tone: 'suspended', title: already ? 'Lagger strike' : 'Tagged as a lagger', facts: { ...facts, result, ...withTodo(todo) } };
     const dm = member && !already ? { id: targetId, text: dms.tagged(reason) } : undefined;
-    return announce(ports, post, already ? `<@${targetId}> is already tagged as a lagger` : `Tagged <@${targetId}> as a lagger`, dm, member ? todo : undefined);
+    return announce(ports, post, already ? `${who(targetId)} is already tagged as a lagger` : `Tagged ${who(targetId)} as a lagger`, dm, member ? todo : undefined);
   });
 }
 
@@ -125,7 +125,7 @@ export function recordInfraction(ports: Ports, staffId: string, targetId: string
       const todo = await move(infraction);
       const post: Post = { tone: 'suspended', title: 'Suspended', facts: { ...facts, infraction, result: daysLabel(r.days_added), ends: r.ends, ...withTodo(todo) } };
       const dm = member ? { id: targetId, text: dms.suspended(infraction, r.days_added, r.ends, reason) } : undefined;
-      return announce(ports, post, `Suspended <@${targetId}> for ${daysLabel(r.days_added)}`, dm, member ? todo : undefined);
+      return announce(ports, post, `Suspended ${who(targetId)} for ${daysLabel(r.days_added)}`, dm, member ? todo : undefined);
     }
 
     const r = await ports.api.tier(targetId, punishment.category, staffId, reason, kept);
@@ -133,7 +133,7 @@ export function recordInfraction(ports: Ports, staffId: string, targetId: string
     if (r.is_warning_only) {
       const result = r.held ? 'Warning; still held at the ban threshold' : r.suspended ? 'Warning; their running suspension is unchanged' : 'Warning';
       const post: Post = { tone: 'warning', title: 'Warning', facts: { ...facts, infraction, result, ...(member ? {} : { todo: 'Not in the server.' }) } };
-      return announce(ports, post, `Warned <@${targetId}>`, member ? { id: targetId, text: dms.warning(infraction, reason) } : undefined, undefined);
+      return announce(ports, post, `Warned ${who(targetId)}`, member ? { id: targetId, text: dms.warning(infraction, reason) } : undefined, undefined);
     }
 
     if (!member) await pend(ports, targetId, r.category, staffId, reason);
@@ -144,11 +144,11 @@ export function recordInfraction(ports: Ports, staffId: string, targetId: string
       const result = reached ? 'Ban threshold reached: suspended until staff ban them with Wick or run /admin unsuspend' : 'Recorded while held at the ban threshold';
       const post: Post = { tone: 'held', title: reached ? 'Held at the ban threshold' : 'Still held', facts: { ...facts, infraction, result, ends: null, ...withTodo(todo) }, pingModerators: reached };
       const dm = member && reached ? { id: targetId, text: dms.held(infraction, reason) } : undefined;
-      return announce(ports, post, reached ? `<@${targetId}> reached the ban threshold and is held until staff act` : `Recorded; <@${targetId}> is still held`, dm, done);
+      return announce(ports, post, reached ? `${who(targetId)} reached the ban threshold and is held until staff act` : `Recorded; ${who(targetId)} is still held`, dm, done);
     }
     const post: Post = { tone: 'suspended', title: 'Suspended', facts: { ...facts, infraction, result: daysLabel(r.days_added), ends: r.ends, ...withTodo(todo) } };
     const dm = member ? { id: targetId, text: dms.suspended(infraction, r.days_added, r.ends, reason) } : undefined;
-    return announce(ports, post, `Suspended <@${targetId}> for ${daysLabel(r.days_added)}`, dm, done);
+    return announce(ports, post, `Suspended ${who(targetId)} for ${daysLabel(r.days_added)}`, dm, done);
   });
 }
 
@@ -161,17 +161,17 @@ export function changeDays(ports: Ports, staffId: string, targetId: string, days
     // A change that ends the suspension is told to the member by its expiry; one
     // Discord cannot say is in the server is still sent the DM, so a miss is reported.
     const member = r.suspended ? await ports.member(targetId).catch(() => undefined) : null;
-    return announce(ports, post, `Changed <@${targetId}>'s suspension by ${change}`, member !== null ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
+    return announce(ports, post, `Changed ${who(targetId)}'s suspension by ${change}`, member !== null ? { id: targetId, text: dms.changed(change, r.ends) } : undefined, undefined);
   });
 }
 
 export function removeTier(ports: Ports, staffId: string, targetId: string, category: TierCategory): Promise<string> {
   return turn(targetId, async () => {
     const r = await ports.api.removeTier(targetId, category, staffId);
-    if (!r.was_changed) return `ℹ️ <@${targetId}> has no ${category === 'lagger' ? 'lagger strike' : `${category} tier`} to remove.`;
+    if (!r.was_changed) return `ℹ️ ${who(targetId)} has no ${category === 'lagger' ? 'lagger strike' : `${category} tier`} to remove.`;
     if (category !== 'lagger') {
       const post: Post = { tone: 'changed', title: 'Tier removed', facts: { member: targetId, infraction: kindLabel(r.category), result: `One tier removed, now tier ${r.tier}` } };
-      return announce(ports, post, `Removed a ${category} tier from <@${targetId}>; it is now ${r.tier}`, undefined, undefined);
+      return announce(ports, post, `Removed a ${category} tier from ${who(targetId)}; it is now ${r.tier}`, undefined, undefined);
     }
     // Below three strikes the tag comes off, if they wear it; when Discord cannot say, staff check.
     const member = await ports.member(targetId).catch(() => undefined);
@@ -184,7 +184,7 @@ export function removeTier(ports: Ports, staffId: string, targetId: string, cate
           : undefined;
     const result = `One strike removed, now ${strikesLabel(r.tier)}${untag ? '; the lagger tag removed' : ''}`;
     const post: Post = { tone: 'changed', title: 'Lagger strike removed', facts: { member: targetId, result, ...withTodo(todo) } };
-    return announce(ports, post, `Removed a lagger strike from <@${targetId}>; now ${strikesLabel(r.tier)}`, untag ? { id: targetId, text: dms.untagged(r.tier) } : undefined, todo);
+    return announce(ports, post, `Removed a lagger strike from ${who(targetId)}; now ${strikesLabel(r.tier)}`, untag ? { id: targetId, text: dms.untagged(r.tier) } : undefined, todo);
   });
 }
 
@@ -209,9 +209,9 @@ async function giveBack(ports: Ports, r: SuspensionCleared, id: string, what: st
 export function unsuspend(ports: Ports, staffId: string, targetId: string, reason: string): Promise<string> {
   return turn(targetId, async () => {
     const ended = await giveBack(ports, await ports.api.unsuspend(targetId, staffId, reason), targetId, 'suspension lifted', staffId);
-    if (!ended) return `ℹ️ <@${targetId}> is not suspended.`;
+    if (!ended) return `ℹ️ ${who(targetId)} is not suspended.`;
     const post: Post = { tone: 'lifted', title: 'Suspension lifted', facts: { member: targetId, reason, ...withTodo(ended.todo) } };
-    return announce(ports, post, `Lifted <@${targetId}>'s suspension`, ended.member ? { id: targetId, text: dms.lifted(reason) } : undefined, ended.todo);
+    return announce(ports, post, `Lifted ${who(targetId)}'s suspension`, ended.member ? { id: targetId, text: dms.lifted(reason) } : undefined, ended.todo);
   });
 }
 
