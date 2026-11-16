@@ -14,6 +14,10 @@ const TONES = {
 
 export type Tone = keyof typeof TONES;
 
+// A member as staff see them: the mention, and the id to search by or paste
+// into a command, since Discord shows a member it has not loaded as unknown.
+export const who = (id: string): string => `<@${id}> \`${id}\``;
+
 export const when = (iso: string): string => {
   const at = Math.floor(Date.parse(iso) / 1000);
   return `<t:${at}:f> (<t:${at}:R>)`;
