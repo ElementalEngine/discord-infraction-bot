@@ -31,7 +31,7 @@ export const kindLabel = (kind: string | null): string =>
   !kind ? 'Suspension' : kind === 'flat' ? 'Flat suspension' : (FLAT_TYPES as readonly string[]).includes(kind) ? `${title(kind)} (flat)` : title(kind);
 export const daysLabel = (days: number): string => `${days} day${days === 1 ? '' : 's'}`;
 // Three strikes tag a lagger; core-api's ladder has the same cap.
-export const STRIKES = 3;
+const STRIKES = 3;
 export const strikesLabel = (strikes: number): string => `strike ${strikes} of ${STRIKES}`;
 export const strikeLabel = (strikes: number): string => `Lagger · ${strikesLabel(strikes)}`;
 

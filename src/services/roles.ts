@@ -35,7 +35,7 @@ export const isHost = (member: Member): boolean => rolesOf(member).includes(conf
 // The moved roles a member holds, which a suspension takes and keeps on the record.
 export const movedRolesOf = (member: Member): string[] => rolesOf(member).filter((id) => config.movedRoles.includes(id));
 
-export function nextRoles(held: readonly string[], remove: readonly string[], add: readonly string[]): string[] {
+function nextRoles(held: readonly string[], remove: readonly string[], add: readonly string[]): string[] {
   return [...new Set([...held.filter((id) => !remove.includes(id)), ...add])];
 }
 
